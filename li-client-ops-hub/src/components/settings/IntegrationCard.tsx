@@ -100,6 +100,7 @@ interface Props {
 
 export default function IntegrationCard({ integration, onStatusChange }: Props) {
   const envKeys: string[] = integration.env_keys ? JSON.parse(integration.env_keys) : [];
+  const isGdrive = integration.name === 'gdrive';
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [hasValues, setHasValues] = useState<Record<string, boolean>>({});
@@ -107,6 +108,8 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [authorizing, setAuthorizing] = useState(false);
+  const [authStatus, setAuthStatus] = useState<{ email: string | null; authorized_at: string | null; expires_at: string | null } | null>(null);
 
   const loadValues = useCallback(async () => {
     const results: Record<string, string> = {};
@@ -122,6 +125,27 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
   }, [integration.name]);
 
   useEffect(() => { loadValues(); }, [loadValues]);
+
+  // Load Google Drive auth status
+  useEffect(() => {
+    if (isGdrive) {
+      api.getGdriveAuthStatus().then(setAuthStatus);
+    }
+  }, [isGdrive]);
+
+  const handleAuthorize = async () => {
+    setAuthorizing(true);
+    setTestResult(null);
+    const result = await api.authorizeGoogleDrive();
+    if (result.success) {
+      setTestResult({ success: true, message: `Authorized as ${result.email}` });
+      api.getGdriveAuthStatus().then(setAuthStatus);
+    } else {
+      setTestResult({ success: false, message: result.message ?? 'Authorization failed' });
+    }
+    setAuthorizing(false);
+    onStatusChange();
+  };
 
   const handleChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -192,10 +216,26 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
         <p className="mt-2 text-xs text-slate-400">Last tested: {new Date(integration.last_tested_at).toLocaleString()}</p>
       )}
 
-      <div className="mt-4 flex gap-2">
+      {/* Google Drive auth status */}
+      {isGdrive && authStatus?.email && (
+        <div className="mt-3 rounded bg-green-50 px-3 py-2 text-xs text-green-700">
+          Authorized as <span className="font-medium">{authStatus.email}</span>
+          {authStatus.expires_at && (
+            <span className="text-green-600"> &middot; Token expires {new Date(authStatus.expires_at).toLocaleString()} (auto-refreshes)</span>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
         <button onClick={handleSave} disabled={!hasDirtyFields || saving} className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40">
           {saving ? 'Saving...' : 'Save'}
         </button>
+        {isGdrive && (
+          <button onClick={handleAuthorize} disabled={authorizing} className="flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40">
+            {authorizing && <Loader2 size={12} className="animate-spin" />}
+            Authorize Google Drive
+          </button>
+        )}
         <button onClick={handleTest} disabled={testing} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
           {testing && <Loader2 size={12} className="animate-spin" />}
           Test Connection

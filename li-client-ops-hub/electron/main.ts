@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { initDB, closeDB } from '../db/client';
 import { registerIPCHandlers } from './ipc';
 import { startQueueManager, stopQueueManager, setMainWindow, enqueueFullCompanySync } from '../sync/queue/manager';
+import { startCloudSyncTimer, stopCloudSyncTimer } from '../sync/cloud-sync';
 import { queryAll } from '../db/client';
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -91,11 +92,15 @@ app.whenReady().then(async () => {
 
   // Start background queue manager — processes pending tasks from previous sessions
   startQueueManager();
+
+  // Start cloud sync timer (pushes to Cloudflare D1 every 5 min if enabled)
+  startCloudSyncTimer();
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
   stopQueueManager();
+  stopCloudSyncTimer();
   closeDB();
 });
 

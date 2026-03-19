@@ -76,6 +76,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('queue:resume'),
   getActiveTasks: () =>
     ipcRenderer.invoke('queue:getActiveTasks'),
+  getQueueStatsForCompany: (companyId: string) =>
+    ipcRenderer.invoke('queue:getQueueStatsForCompany', companyId),
+  getCompanyMessageStats: (companyId: string) =>
+    ipcRenderer.invoke('syncLogs:getCompanyMessageStats', companyId),
 
   // ── Settings ────────────────────────────────────────────────────────
   getIntegrations: () => ipcRenderer.invoke('settings:getIntegrations'),
@@ -157,6 +161,20 @@ contextBridge.exposeInMainWorld('api', {
   getReadaiRagStats: () =>
     ipcRenderer.invoke('readai:getRagStats'),
 
+  // ── Google Drive ────────────────────────────────────────────────────
+  authorizeGoogleDrive: () => ipcRenderer.invoke('gdrive:authorize'),
+  getGdriveAuthStatus: () => ipcRenderer.invoke('gdrive:getAuthStatus'),
+  syncGdriveFolders: () => ipcRenderer.invoke('gdrive:syncFolders'),
+  syncGdriveFolderFiles: (folderId: string) =>
+    ipcRenderer.invoke('gdrive:syncFolderFiles', folderId),
+  getGdriveFolders: () => ipcRenderer.invoke('gdrive:getFolders'),
+  getGdriveFolderFiles: (folderId: string) =>
+    ipcRenderer.invoke('gdrive:getFolderFiles', folderId),
+  acceptGdriveSuggestion: (folderId: string) =>
+    ipcRenderer.invoke('gdrive:acceptSuggestion', folderId),
+  linkGdriveFolder: (folderId: string, companyId: string) =>
+    ipcRenderer.invoke('gdrive:linkFolder', folderId, companyId),
+
   // ── Settings sub-page data ──────────────────────────────────────────
   getTeamworkWithAssociations: () => ipcRenderer.invoke('teamwork:getWithAssociations'),
   getReadaiWithAssociations: (filters?: unknown) => ipcRenderer.invoke('readai:getMeetingsWithAssociations', filters),
@@ -173,4 +191,37 @@ contextBridge.exposeInMainWorld('api', {
   ragSearch: (query: string, filters?: unknown) => ipcRenderer.invoke('rag:search', query, filters),
   ragClearAll: () => ipcRenderer.invoke('rag:clearAll'),
   getRagStorageStats: () => ipcRenderer.invoke('rag:getStorageStats'),
+
+  // ── Google Calendar ─────────────────────────────────────────────────
+  getCalendars: () => ipcRenderer.invoke('calendar:getCalendars'),
+  toggleCalendarSync: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke('calendar:toggleSync', id, enabled),
+  getUnmatchedCalendarEvents: () => ipcRenderer.invoke('calendar:getUnmatched'),
+  syncCalendar: () => ipcRenderer.invoke('calendar:sync'),
+  getCalendarForCompany: (companyId: string) =>
+    ipcRenderer.invoke('calendar:getForCompany', companyId),
+  linkCalendarEvent: (eventId: string, companyId: string) =>
+    ipcRenderer.invoke('calendar:linkEvent', eventId, companyId),
+  checkGoogleScopes: () => ipcRenderer.invoke('google:checkScopes'),
+  getCalendarStats: () => ipcRenderer.invoke('calendar:getStats'),
+
+  // ── Morning Briefing ──────────────────────────────────────────────────
+  getSlaViolations: () => ipcRenderer.invoke('briefing:getSlaViolations'),
+  getBudgetAlerts: () => ipcRenderer.invoke('briefing:getBudgetAlerts'),
+  getSyncAlerts: () => ipcRenderer.invoke('briefing:getSyncAlerts'),
+  getUnassociatedClients: () => ipcRenderer.invoke('briefing:getUnassociatedClients'),
+  getPortfolioPulse: () => ipcRenderer.invoke('briefing:getPortfolioPulse'),
+  getTodaysMeetings: () => ipcRenderer.invoke('briefing:getTodaysMeetings'),
+  getRecentActivity: () => ipcRenderer.invoke('briefing:getRecentActivity'),
+
+  // ── Cloud Sync ──────────────────────────────────────────────────────
+  cloudSyncNow: (fullResync?: boolean) => ipcRenderer.invoke('cloud:syncNow', fullResync),
+  getCloudSyncStatus: () => ipcRenderer.invoke('cloud:getStatus'),
+
+  // ── Health Score ──────────────────────────────────────────────────────
+  getHealthScore: (companyId: string) => ipcRenderer.invoke('health:getForCompany', companyId),
+  getHealthHistory: (companyId: string) => ipcRenderer.invoke('health:getHistory', companyId),
+  getHealthRanking: () => ipcRenderer.invoke('health:getRanking'),
+  getAtRiskCompanies: () => ipcRenderer.invoke('health:getAtRisk'),
+  recomputeHealthScores: () => ipcRenderer.invoke('health:recompute'),
 });

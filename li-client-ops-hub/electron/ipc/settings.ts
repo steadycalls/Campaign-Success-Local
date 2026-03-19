@@ -156,23 +156,10 @@ async function testReadAiMcp(env: Record<string, string>): Promise<{ success: bo
   }
 }
 
-async function testGDrive(env: Record<string, string>): Promise<{ success: boolean; message: string }> {
-  const jsonPath = env['GOOGLE_SERVICE_ACCOUNT_JSON_PATH'];
-  const folderId = env['GOOGLE_DRIVE_PARENT_FOLDER_ID'];
-  if (!jsonPath) return { success: false, message: 'GOOGLE_SERVICE_ACCOUNT_JSON_PATH is not set' };
-  if (!folderId) return { success: false, message: 'GOOGLE_DRIVE_PARENT_FOLDER_ID is not set' };
-
-  if (!fs.existsSync(jsonPath)) {
-    return { success: false, message: `Service account file not found: ${jsonPath}` };
-  }
-
-  try {
-    JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-  } catch {
-    return { success: false, message: 'Service account JSON file is not valid JSON' };
-  }
-
-  return { success: true, message: 'Google Drive credentials file validated (full auth test requires OAuth flow)' };
+async function testGDrive(_env: Record<string, string>): Promise<{ success: boolean; message: string }> {
+  // Delegate to the gdrive adapter's full connection test (uses OAuth tokens)
+  const { testGoogleDriveConnection } = await import('../../sync/adapters/gdrive');
+  return testGoogleDriveConnection();
 }
 
 async function testDiscord(env: Record<string, string>): Promise<{ success: boolean; message: string }> {

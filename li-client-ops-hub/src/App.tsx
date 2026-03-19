@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
+import TodayPage from './pages/TodayPage';
 import PortfolioPage from './pages/PortfolioPage';
 import CompanyPage from './pages/CompanyPage';
 import ClientsPage from './pages/ClientsPage';
@@ -11,6 +12,7 @@ import TeamworkPage from './pages/settings/TeamworkPage';
 import DiscordPage from './pages/settings/DiscordPage';
 import ReadaiPage from './pages/settings/ReadaiPage';
 import AssociationsPage from './pages/settings/AssociationsPage';
+import GDrivePage from './pages/settings/GDrivePage';
 import RagPage from './pages/RagPage';
 
 export default function App() {
@@ -22,7 +24,8 @@ export default function App() {
           <TopBar />
           <main className="flex-1 overflow-y-auto">
             <Routes>
-              <Route path="/" element={<PortfolioPage />} />
+              <Route path="/" element={<TodayPage />} />
+              <Route path="/portfolio" element={<PortfolioPage />} />
               <Route path="/company/:id" element={<CompanyPage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/logs" element={<SyncLogsPage />} />
@@ -32,6 +35,7 @@ export default function App() {
               <Route path="/settings/discord" element={<DiscordPage />} />
               <Route path="/settings/readai" element={<ReadaiPage />} />
               <Route path="/settings/associations" element={<AssociationsPage />} />
+              <Route path="/settings/gdrive" element={<GDrivePage />} />
               <Route path="/rag" element={<RagPage />} />
             </Routes>
           </main>

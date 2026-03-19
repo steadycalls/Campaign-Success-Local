@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Loader2, Search, X, ChevronDown, ChevronRight, BellOff } from 'lucide-react';
 import { api } from '../lib/ipc';
 import { useAlerts } from '../hooks/useDB';
@@ -39,6 +39,11 @@ function SyncDetail({ companyId, latestRun }: { companyId: string; latestRun: Re
   const { data: historyRaw } = useAutoRefresh(historyFetcher, [companyId], 60000);
   const history: SyncRun[] = (historyRaw as SyncRun[]) ?? [];
 
+  const [msgStats, setMsgStats] = useState<{ total: number; byType: Array<{ type: string; cnt: number }> } | null>(null);
+  useEffect(() => {
+    api.getCompanyMessageStats(companyId).then(setMsgStats);
+  }, [companyId]);
+
   // Parse detail_json from latest run
   let detail: Record<string, { found?: number; created?: number; updated?: number }> = {};
   try { detail = latestRun.detail_json ? JSON.parse(latestRun.detail_json as string) : {}; } catch { /* */ }
@@ -46,6 +51,11 @@ function SyncDetail({ companyId, latestRun }: { companyId: string; latestRun: Re
   const entityNames: Record<string, string> = {
     contacts: 'Contacts', messages: 'Messages', users: 'Users', workflows: 'Workflows',
     funnels: 'Funnels', sites: 'Sites', templates: 'Email Templates', fields: 'Custom Fields',
+  };
+
+  const msgTypeLabels: Record<string, string> = {
+    sms: 'SMS', email: 'Email', call: 'Call', facebook: 'Facebook', instagram: 'Instagram',
+    gmb: 'Google Business', whatsapp: 'WhatsApp', live_chat: 'Live Chat', activity: 'Activity',
   };
 
   return (
@@ -72,6 +82,30 @@ function SyncDetail({ companyId, latestRun }: { companyId: string; latestRun: Re
             </table>
           </div>
         ) : null}
+
+        {/* Messages breakdown by type */}
+        {msgStats && msgStats.total > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold uppercase text-slate-500 mb-1">Messages Breakdown</h4>
+            <table className="text-xs max-w-xs">
+              <thead>
+                <tr className="text-slate-400"><th className="py-0.5 text-left">Type</th><th className="py-0.5 text-right">Count</th></tr>
+              </thead>
+              <tbody>
+                {msgStats.byType.map((row) => (
+                  <tr key={row.type} className="text-slate-600 border-t border-slate-100">
+                    <td className="py-0.5">{msgTypeLabels[row.type] ?? row.type ?? 'Unknown'}</td>
+                    <td className="py-0.5 text-right">{(row.cnt as number).toLocaleString()}</td>
+                  </tr>
+                ))}
+                <tr className="text-slate-700 font-medium border-t border-slate-200">
+                  <td className="py-0.5">Total</td>
+                  <td className="py-0.5 text-right">{msgStats.total.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Run history */}
         {history.length > 0 ? (
@@ -230,5 +264,3 @@ export default function SyncLogsPage() {
     </div>
   );
 }
-
-import React from 'react';

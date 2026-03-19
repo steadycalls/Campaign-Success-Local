@@ -52,6 +52,34 @@ export function registerQueueHandlers(): void {
   ipcMain.handle('queue:getMemory', () => getMemoryStats());
   ipcMain.handle('queue:isRunning', () => isQueueRunning());
 
+  // Per-company queue stats
+  ipcMain.handle('queue:getQueueStatsForCompany', (_e, companyId: string) => {
+    return queryOne(`
+      SELECT
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+      FROM sync_queue
+      WHERE company_id = ? AND created_at >= datetime('now', '-24 hours')
+    `, [companyId]);
+  });
+
+  // Message stats per company (for sync logs)
+  ipcMain.handle('syncLogs:getCompanyMessageStats', (_e, companyId: string) => {
+    const total = queryOne('SELECT COUNT(*) as cnt FROM messages WHERE company_id = ?', [companyId]);
+    const byType = queryAll(`
+      SELECT type, COUNT(*) as cnt FROM messages
+      WHERE company_id = ?
+      GROUP BY type
+      ORDER BY cnt DESC
+    `, [companyId]);
+    return {
+      total: (total?.cnt as number) ?? 0,
+      byType,
+    };
+  });
+
   // Pause/resume
   ipcMain.handle('queue:pause', () => { stopQueueManager(); return { success: true }; });
   ipcMain.handle('queue:resume', () => { startQueueManager(); return { success: true }; });

@@ -142,7 +142,8 @@ function seedIntegrations(database: SqlJsDatabase): void {
     {
       name: 'gdrive',
       display_name: 'Google Drive',
-      env_keys: '["GOOGLE_SERVICE_ACCOUNT_JSON_PATH","GOOGLE_DRIVE_PARENT_FOLDER_ID"]',
+      env_keys: '["GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_DRIVE_CLIENT_FOLDER_ID"]',
+      description: 'Sync client folders and documents from Google Drive.',
     },
     {
       name: 'discord',

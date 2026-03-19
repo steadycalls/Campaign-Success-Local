@@ -20,6 +20,9 @@ data/recordings/
 Thumbs.db
 .DS_Store
 
+# Nested repos
+Campaign-Success-Local/
+
 # IDE
 .idea/
 *.swp

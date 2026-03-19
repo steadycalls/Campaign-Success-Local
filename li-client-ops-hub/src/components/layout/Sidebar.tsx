@@ -1,8 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutGrid, Users, Activity, Settings, Brain } from 'lucide-react';
+import { Sun, LayoutGrid, Users, Activity, Settings, Brain } from 'lucide-react';
 
 const mainNav = [
-  { to: '/', label: 'Portfolio', icon: LayoutGrid, end: true },
+  { to: '/', label: 'Today', icon: Sun, end: true },
+  { to: '/portfolio', label: 'Portfolio', icon: LayoutGrid, end: true },
   { to: '/clients', label: 'Clients', icon: Users, end: true },
   { to: '/logs', label: 'Sync Logs', icon: Activity, end: true },
   { to: '/rag', label: 'RAG', icon: Brain, end: true },
@@ -14,6 +15,7 @@ const settingsNav = [
   { to: '/settings/teamwork', label: 'Teamwork', end: true },
   { to: '/settings/discord', label: 'Discord', end: true },
   { to: '/settings/readai', label: 'Read.ai', end: true },
+  { to: '/settings/gdrive', label: 'Google Drive', end: true },
   { to: '/settings/associations', label: 'Associations', end: true },
 ];
 

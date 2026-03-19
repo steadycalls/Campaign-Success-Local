@@ -119,6 +119,7 @@ export default function PortfolioPage() {
   const [sortKey, setSortKey] = useState<SortKey>('sla');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [syncing, setSyncing] = useState(false);
+  const liveProgress = usePortfolioLiveProgress();
 
   const filters: CompanyFilters = useMemo(() => ({
     search: search || undefined,
@@ -211,14 +212,23 @@ export default function PortfolioPage() {
               {sorted.map((c) => {
                 const sync = relativeTime(c.last_sync_at);
                 const newCount = (c as unknown as Record<string, unknown>)[periodFieldMap[contactPeriod]] as number ?? 0;
+                const live = liveProgress[c.id];
+                const liveSynced = live?.contacts_synced ?? c.contact_count;
+                const liveTotal = live?.contacts_api_total ?? c.contacts_api_total;
+                const liveActive = live && live.overall_status !== 'idle' && live.overall_status !== 'completed';
+                const liveMsgs = live?.messages_synced_total ?? (c.messages_synced_total ?? 0);
+
                 return (
                   <tr key={c.id} onClick={() => navigate(`/company/${c.id}`)} className="cursor-pointer hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-3">
-                      <div className="font-medium text-slate-900">{c.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        {liveActive && <div className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse shrink-0" />}
+                        <div className="font-medium text-slate-900">{c.name}</div>
+                      </div>
                       {c.website && <div className="text-xs text-slate-400 truncate max-w-[200px]">{c.website}</div>}
                     </td>
                     <td className="px-4 py-3"><SLABadge status={c.sla_status} days={c.sla_days_since_contact} /></td>
-                    <td className="px-4 py-3"><ContactsCell synced={c.contact_count} apiTotal={c.contacts_api_total} /></td>
+                    <td className="px-4 py-3"><ContactsCell synced={liveSynced} apiTotal={liveTotal} /></td>
                     <td className="px-4 py-3">
                       {newCount > 0 ? (
                         <span className="text-green-600 font-medium">+{newCount.toLocaleString()}</span>
@@ -227,7 +237,7 @@ export default function PortfolioPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {(c.messages_synced_total ?? 0) > 0 ? (c.messages_synced_total ?? 0).toLocaleString() : <span className="text-slate-400">&mdash;</span>}
+                      {liveMsgs > 0 ? liveMsgs.toLocaleString() : <span className="text-slate-400">&mdash;</span>}
                     </td>
                     <td className="px-4 py-3"><BudgetBar percent={c.budget_percent} used={c.budget_used} total={c.monthly_budget} /></td>
                     <td className={`px-4 py-3 text-xs ${sync.color}`}>{sync.text}</td>

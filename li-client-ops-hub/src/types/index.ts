@@ -33,6 +33,12 @@ export interface Company {
   sites_count?: number;
   email_templates_count?: number;
   custom_fields_count?: number;
+  health_score?: number | null;
+  health_grade?: string | null;
+  health_status?: string | null;
+  health_trend?: string | null;
+  health_computed_at?: string | null;
+  health_components_json?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +93,13 @@ export interface Message {
   direction: 'inbound' | 'outbound';
   type: string | null;
   body_preview: string | null;
+  body_full: string | null;
+  subject: string | null;
+  call_duration: number | null;
+  call_status: string | null;
+  call_recording_url: string | null;
+  has_attachments: number;
+  attachment_count: number;
   message_at: string;
   created_at: string;
 }
@@ -164,12 +177,46 @@ export interface DriveFile {
   id: string;
   company_id: string;
   drive_file_id: string | null;
+  folder_id: string | null;
   name: string;
   mime_type: string | null;
   size_bytes: number | null;
   modified_at: string | null;
   web_view_url: string | null;
+  raw_json: string | null;
+  synced_at: string | null;
   created_at: string;
+}
+
+export interface DriveFolder {
+  id: string;
+  drive_folder_id: string;
+  name: string;
+  web_view_url: string | null;
+  modified_at: string | null;
+  created_at_drive: string | null;
+  owner_email: string | null;
+  shared: number;
+  file_count: number;
+  company_id: string | null;
+  client_contact_id: string | null;
+  suggested_company_id: string | null;
+  suggested_company_name: string | null;
+  suggestion_score: number | null;
+  raw_json: string;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  linked_company_name?: string | null;
+  linked_client_name?: string | null;
+  linked_client_id?: string | null;
+}
+
+export interface GoogleAuthStatus {
+  email: string | null;
+  authorized_at: string | null;
+  expires_at: string | null;
 }
 
 export interface SyncRun {
@@ -253,6 +300,44 @@ export interface DiscordChannel {
   tag: string | null;
 }
 
+// ── Health Score types ────────────────────────────────────────────────
+
+export interface HealthComponent {
+  name: string;
+  weight: number;
+  score: number;
+  status: 'green' | 'yellow' | 'red' | 'gray';
+  detail: string;
+}
+
+export interface HealthScoreData {
+  score: number | null;
+  grade: string | null;
+  status: string | null;
+  trend: string | null;
+  computedAt: string | null;
+  components: HealthComponent[];
+}
+
+export interface HealthHistoryEntry {
+  health_score: number;
+  health_grade: string;
+  computed_at: string;
+}
+
+export interface HealthRanking {
+  id: string;
+  name: string;
+  health_score: number;
+  health_grade: string;
+  health_status: string;
+  health_trend: string;
+}
+
+export interface AtRiskCompany extends HealthRanking {
+  health_components_json: string;
+}
+
 // ── IPC API shape (exposed via preload) ───────────────────────────────
 
 export interface CompanyFilters {
@@ -283,6 +368,16 @@ export interface ElectronAPI {
   // Drive Files
   getDriveFiles: (companyId: string) => Promise<DriveFile[]>;
 
+  // Google Drive
+  authorizeGoogleDrive: () => Promise<{ success: boolean; email?: string; message?: string }>;
+  getGdriveAuthStatus: () => Promise<GoogleAuthStatus | null>;
+  syncGdriveFolders: () => Promise<{ success: boolean; found?: number; created?: number; updated?: number; message?: string }>;
+  syncGdriveFolderFiles: (folderId: string) => Promise<{ success: boolean; found?: number; created?: number; updated?: number; message?: string }>;
+  getGdriveFolders: () => Promise<DriveFolder[]>;
+  getGdriveFolderFiles: (folderId: string) => Promise<DriveFile[]>;
+  acceptGdriveSuggestion: (folderId: string) => Promise<{ success: boolean }>;
+  linkGdriveFolder: (folderId: string, companyId: string) => Promise<{ success: boolean }>;
+
   // Background queue
   queueSyncCompany: (companyId: string) => Promise<{ success: boolean; message?: string }>;
   queueSyncAll: () => Promise<{ success: boolean; message?: string }>;
@@ -290,6 +385,8 @@ export interface ElectronAPI {
   getQueueProgressForCompany: (companyId: string) => Promise<unknown>;
   getQueueStats: () => Promise<{ total: number; pending: number; running: number; completed: number; failed: number }>;
   getMemoryStats: () => Promise<{ used: number; limit: number; total: number; percent: number }>;
+  getQueueStatsForCompany: (companyId: string) => Promise<{ pending: number; running: number; completed: number; failed: number } | null>;
+  getCompanyMessageStats: (companyId: string) => Promise<{ total: number; byType: Array<{ type: string; cnt: number }> }>;
   isQueueRunning: () => Promise<boolean>;
   pauseQueue: () => Promise<{ success: boolean }>;
   resumeQueue: () => Promise<{ success: boolean }>;
@@ -376,6 +473,36 @@ export interface ElectronAPI {
   ragSearch: (query: string, filters?: unknown) => Promise<Array<{ id: string; content: string; score: number; sourceType: string; companyName: string | null; metadata: unknown }>>;
   ragClearAll: () => Promise<{ success: boolean }>;
   getRagStorageStats: () => Promise<{ dbTotalBytes: number; vectorBytes: number; contentBytes: number }>;
+
+  // Morning Briefing
+  getSlaViolations: () => Promise<{ violations: unknown[]; warnings: unknown[] }>;
+  getBudgetAlerts: () => Promise<{ critical: unknown[]; warning: unknown[] }>;
+  getSyncAlerts: () => Promise<unknown[]>;
+  getUnassociatedClients: () => Promise<unknown[]>;
+  getPortfolioPulse: () => Promise<{ companies: Record<string, unknown> | null; newContacts7d: number; outboundMessages7d: number; syncStatus: Record<string, unknown> | null; queueStats: Record<string, unknown> | null }>;
+  getTodaysMeetings: () => Promise<{ meetings: unknown[] }>;
+  getRecentActivity: () => Promise<unknown[]>;
+
+  // Cloud Sync
+  cloudSyncNow: (fullResync?: boolean) => Promise<{ success: boolean; rowsPushed: number; error?: string }>;
+  getCloudSyncStatus: () => Promise<{ enabled: boolean; lastSyncAt: string | null; lastError: string | null; isSyncing: boolean }>;
+
+  // Google Calendar
+  getCalendars: () => Promise<unknown[]>;
+  toggleCalendarSync: (id: string, enabled: boolean) => Promise<{ success: boolean }>;
+  getUnmatchedCalendarEvents: () => Promise<unknown[]>;
+  syncCalendar: () => Promise<{ success: boolean; found?: number; created?: number; updated?: number; message?: string }>;
+  getCalendarForCompany: (companyId: string) => Promise<{ upcoming: unknown[]; recent: unknown[] }>;
+  linkCalendarEvent: (eventId: string, companyId: string) => Promise<{ success: boolean }>;
+  checkGoogleScopes: () => Promise<{ authorized: boolean; email?: string; hasCalendar: boolean; needsReauth: boolean }>;
+  getCalendarStats: () => Promise<{ totalEvents: number; matchedEvents: number; unmatchedEvents: number; selectedCalendars: number }>;
+
+  // Health Score
+  getHealthScore: (companyId: string) => Promise<HealthScoreData | null>;
+  getHealthHistory: (companyId: string) => Promise<HealthHistoryEntry[]>;
+  getHealthRanking: () => Promise<HealthRanking[]>;
+  getAtRiskCompanies: () => Promise<AtRiskCompany[]>;
+  recomputeHealthScores: () => Promise<{ computed: number; changed: number }>;
 }
 
 declare global {
