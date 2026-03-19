@@ -4,7 +4,14 @@ A local Electron desktop app for managing Logic Inbound's client operations. Syn
 
 ## What This Does
 
-This application syncs every 2 hours (6 AM–8 PM CT, weekdays) from GHL, Teamwork, Read.ai, and Google Drive. It provides 7-day SLA tracking that flags client contacts who haven't received outbound communication within 7 days, a portfolio overview showing all companies in one table with SLA badges and Teamwork budget bars, and a company drilldown view with contacts, message timeline, Teamwork budget, meetings, and Drive documents per company. Per-company manual sync allows triggering a real-time sync from the UI, and stale sync alerting fires at 12h, 24h, and 48h if syncs stop running. A Settings tab manages all integration credentials from the UI (writes to `.env`), and the app minimizes to the system tray for background operation with a quick-sync option from the tray menu.
+- **Syncs every 2 hours** (6 AM–8 PM CT, weekdays) from GHL, Teamwork, Read.ai, and Google Drive
+- **7-day SLA tracking** — flags client contacts that haven't received outbound communication within 7 days
+- **Portfolio overview** — all companies in one table with SLA badges, Teamwork budget bars, message counts
+- **Company drilldown** — contacts, message timeline, Teamwork budget, meetings, and Drive documents per company
+- **Per-company manual sync** — click Sync Now on any company, get real-time progress
+- **Stale sync alerting** — alerts fire at 12h, 24h, and 48h if syncs stop running
+- **Settings tab** — manage all integration credentials from the UI (writes to `.env`)
+- **System tray** — minimizes to tray, runs in background, quick-sync from tray menu
 
 ## Stack
 
@@ -23,19 +30,16 @@ This application syncs every 2 hours (6 AM–8 PM CT, weekdays) from GHL, Teamwo
 Run the prerequisite checker (PowerShell as Admin):
 
 ```powershell
-.\setup-environment.ps1
+.\setup-prerequisites.ps1
 ```
 
 This checks for and installs: Node.js 20+, Git, Python 3.11+, C++ Build Tools, VS Code, and required VS Code extensions.
 
 Or install manually:
-
-| Dependency | Command |
-|---|---|
-| Node.js 20+ | `winget install OpenJS.NodeJS.LTS` |
-| Python 3.11+ | `winget install Python.Python.3.11` |
-| Git | `winget install Git.Git` |
-| C++ Build Tools | [Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/visual-cpp-build-tools/) → select "Desktop development with C++" |
+- **Node.js 20+** — `winget install OpenJS.NodeJS.LTS`
+- **Python 3.11+** — `winget install Python.Python.3.11`
+- **C++ Build Tools** — [Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/visual-cpp-build-tools/) → select "Desktop development with C++"
+- **Git** — `winget install Git.Git`
 
 ### Clone & Open
 
@@ -127,6 +131,39 @@ Campaign-Success-Local/
 └── CLAUDE.md              ← Claude Code project context
 ```
 
+## VS Code Setup
+
+The repo includes preconfigured `.vscode/` settings. When you open the project:
+
+1. **Recommended extensions** auto-prompt — install all of them
+2. **Ctrl+Shift+B** — runs the default build task (`npm run dev`)
+3. **F5** — launches Electron in debug mode
+4. **SQLite Viewer** — click any `.db` file in the Explorer to inspect tables
+
+### Required Extensions
+
+These are installed by the prerequisite script, or install manually:
+
+| Extension | What it does |
+|---|---|
+| ESLint | Real-time error checking |
+| Tailwind CSS IntelliSense | Autocomplete for Tailwind classes |
+| TypeScript Importer | Auto-imports on type |
+| Prettier | Format on save |
+| SQLite Viewer | View ops-hub.db tables in VS Code |
+| Error Lens | Shows errors inline (huge time saver) |
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| Open terminal | `Ctrl+`` ` |
+| Run build task | `Ctrl+Shift+B` |
+| Go to file | `Ctrl+P` |
+| Find in all files | `Ctrl+Shift+F` |
+| Quick fix / auto-import | `Ctrl+.` |
+| Toggle sidebar | `Ctrl+B` |
+
 ## npm Scripts
 
 | Script | Description |
@@ -172,34 +209,17 @@ React Renderer ←→ IPC Bridge ←→ Electron Main Process
                                     └── Scheduler (node-cron)
 ```
 
-## VS Code Setup
-
-The repo includes preconfigured `.vscode/` settings. When you open the project, recommended extensions will auto-prompt — install all of them. `Ctrl+Shift+B` runs the default build task (`npm run dev`), `F5` launches Electron in debug mode, and the SQLite Viewer extension lets you click any `.db` file in the Explorer to inspect tables directly.
-
-### Required Extensions
-
-| Extension | What it does |
-|---|---|
-| ESLint | Real-time error checking |
-| Tailwind CSS IntelliSense | Autocomplete for Tailwind classes |
-| TypeScript Importer | Auto-imports on type |
-| Prettier | Format on save |
-| SQLite Viewer | View ops-hub.db tables in VS Code |
-| Error Lens | Shows errors inline (huge time saver) |
-
 ## Build With Claude Code
 
 This project is built via sequenced Claude Code prompts (27–34). Open Claude Code in the repo and run prompts in order:
 
-| Prompt | What it builds |
-|---|---|
-| P27 | Electron + Vite + React scaffold |
-| P28 | SQLite schema + IPC bridge |
-| P29 | Settings page + .env management |
-| P30 | GHL adapter + SLA computation |
-| P31 | Portfolio + Company detail pages |
-| P32 | Teamwork adapter |
-| P33 | Read.ai + Google Drive adapters |
-| P34 | Scheduler + sync logs + tray + packaging |
+1. **P27** — Electron + Vite + React scaffold
+2. **P28** — SQLite schema + IPC bridge
+3. **P29** — Settings page + .env management
+4. **P30** — GHL adapter + SLA computation
+5. **P31** — Portfolio + Company detail pages
+6. **P32** — Teamwork adapter
+7. **P33** — Read.ai + Google Drive adapters
+8. **P34** — Scheduler + sync logs + tray + packaging
 
 Validate each prompt before moving to the next.

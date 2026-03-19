@@ -1,0 +1,19 @@
+node_modules/
+dist/
+release/
+data/*.db
+data/*.db-journal
+.env
+*.js.map
+
+# Compiled electron JS (generated from .ts)
+electron-dist/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+*.swp
+*.swo

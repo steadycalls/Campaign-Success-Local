@@ -1,0 +1,30 @@
+ALTER TABLE meetings ADD COLUMN start_time_ms INTEGER;
+ALTER TABLE meetings ADD COLUMN end_time_ms INTEGER;
+ALTER TABLE meetings ADD COLUMN platform TEXT;
+ALTER TABLE meetings ADD COLUMN platform_id TEXT;
+ALTER TABLE meetings ADD COLUMN owner_name TEXT;
+ALTER TABLE meetings ADD COLUMN owner_email TEXT;
+ALTER TABLE meetings ADD COLUMN participants_json TEXT;
+ALTER TABLE meetings ADD COLUMN participants_count INTEGER DEFAULT 0;
+ALTER TABLE meetings ADD COLUMN attended_count INTEGER DEFAULT 0;
+ALTER TABLE meetings ADD COLUMN topics_json TEXT;
+ALTER TABLE meetings ADD COLUMN key_questions_json TEXT;
+ALTER TABLE meetings ADD COLUMN chapter_summaries_json TEXT;
+ALTER TABLE meetings ADD COLUMN read_score REAL;
+ALTER TABLE meetings ADD COLUMN sentiment REAL;
+ALTER TABLE meetings ADD COLUMN engagement REAL;
+ALTER TABLE meetings ADD COLUMN transcript_text TEXT;
+ALTER TABLE meetings ADD COLUMN transcript_json TEXT;
+ALTER TABLE meetings ADD COLUMN report_url TEXT;
+ALTER TABLE meetings ADD COLUMN recording_url TEXT;
+ALTER TABLE meetings ADD COLUMN folders_json TEXT;
+ALTER TABLE meetings ADD COLUMN matched_domains TEXT;
+ALTER TABLE meetings ADD COLUMN match_method TEXT;
+ALTER TABLE meetings ADD COLUMN raw_json TEXT;
+ALTER TABLE meetings ADD COLUMN expanded INTEGER DEFAULT 0;
+ALTER TABLE meetings ADD COLUMN synced_at TEXT;
+
+ALTER TABLE action_items ADD COLUMN raw_json TEXT;
+ALTER TABLE action_items ADD COLUMN synced_at TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_meetings_start ON meetings(start_time_ms DESC);
