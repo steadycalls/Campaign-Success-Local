@@ -2,21 +2,31 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Electron: Main",
       "type": "node",
       "request": "launch",
-      "name": "Launch Dev Server",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "args": ["."],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/electron/**/*.js"]
     },
     {
-      "type": "node",
+      "name": "Electron: Renderer (Chrome)",
+      "type": "chrome",
       "request": "attach",
-      "name": "Attach to Node Process",
-      "port": 9229,
-      "skipFiles": ["<node_internals>/**"]
+      "port": 9222,
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMaps": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Electron: Full App",
+      "configurations": ["Electron: Main", "Electron: Renderer (Chrome)"]
     }
   ]
 }

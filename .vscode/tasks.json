@@ -2,58 +2,43 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "npm: install",
-      "type": "shell",
-      "command": "npm install",
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "npm: dev",
+      "label": "Dev: Full App",
       "type": "shell",
       "command": "npm run dev",
-      "group": {
-        "kind": "build",
-        "isDefault": true
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "ready in"
+        }
       },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
+      "group": { "kind": "build", "isDefault": true }
     },
     {
-      "label": "npm: build",
+      "label": "Build: Production",
       "type": "shell",
       "command": "npm run build",
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "group": "build"
     },
     {
-      "label": "npm: lint",
+      "label": "Package: Windows Installer",
       "type": "shell",
-      "command": "npm run lint",
-      "group": "test",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": "npm run package",
+      "group": "build"
     },
     {
-      "label": "setup-environment",
+      "label": "DB: View Tables",
       "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File .\\setup-environment.ps1",
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
+      "command": "npx tsx db/inspect.ts",
+      "group": "test"
+    },
+    {
+      "label": "Sync: Manual Full",
+      "type": "shell",
+      "command": "npm run sync:now",
+      "group": "test"
     }
   ]
 }

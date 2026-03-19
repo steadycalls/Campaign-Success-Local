@@ -1,24 +1,34 @@
 {
-  "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.tabSize": 2,
-  "editor.insertSpaces": true,
-  "editor.rulers": [100],
-  "files.eol": "\n",
-  "files.trimTrailingWhitespace": true,
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact"
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "tailwindCSS.experimental.classRegex": [
+    ["cn\\(([^)]*)\\)", "'([^']*)'"]
   ],
-  "eslint.run": "onSave",
-  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "files.exclude": {
+    "node_modules": true,
+    "release": true,
+    "dist": true
+  },
   "search.exclude": {
-    "**/node_modules": true,
-    "**/dist": true,
-    "**/.git": true
+    "node_modules": true,
+    "release": true,
+    "dist": true,
+    "data/*.db": true
+  },
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }

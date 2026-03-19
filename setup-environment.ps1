@@ -1,116 +1,301 @@
-<#
-.SYNOPSIS
-Sets up the local development environment for the Campaign-Success-Local project.
+# ============================================================================
+# Client Ops Hub — Prerequisite Checker & Installer
+# Run in PowerShell as Administrator
+# ============================================================================
 
-.DESCRIPTION
-This script checks for and installs the necessary prerequisites:
-- Node.js (v20+)
-- Git
-- Python (v3.11+)
-- C++ Build Tools
-- Checks PowerShell execution policy
+$ErrorActionPreference = "Continue"
 
-.NOTES
-Run this script as Administrator.
-#>
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "  Client Ops Hub — Environment Setup" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
 
-Requires -RunAsAdministrator
+$issues = @()
+$installed = @()
 
-$ErrorActionPreference = "Stop"
+# ----------------------------------------------------------------------------
+# 1. NODE.JS 20+
+# ----------------------------------------------------------------------------
+Write-Host "[1/5] Checking Node.js..." -ForegroundColor Yellow
 
-function Write-Step ($message) {
-    Write-Host "`n[+] $message" -ForegroundColor Cyan
-}
-
-function Write-Success ($message) {
-    Write-Host "    [✓] $message" -ForegroundColor Green
-}
-
-function Write-WarningMsg ($message) {
-    Write-Host "    [!] $message" -ForegroundColor Yellow
-}
-
-function Write-ErrorMsg ($message) {
-    Write-Host "    [x] $message" -ForegroundColor Red
-}
-
-function Check-Command ($command) {
-    return (Get-Command $command -ErrorAction SilentlyContinue) -ne $null
-}
-
-Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "  Campaign-Success-Local Environment Setup Script" -ForegroundColor Cyan
-Write-Host "=======================================================" -ForegroundColor Cyan
-
-# 1. Check Execution Policy
-Write-Step "Checking PowerShell Execution Policy..."
-$policy = Get-ExecutionPolicy
-if ($policy -eq "Restricted" -or $policy -eq "AllSigned") {
-    Write-WarningMsg "Execution policy is set to $policy. This might prevent running scripts."
-    Write-WarningMsg "Run: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
-} else {
-    Write-Success "Execution policy is $policy (Good)."
-}
-
-# 2. Check Git
-Write-Step "Checking Git..."
-if (Check-Command "git") {
-    $gitVer = git --version
-    Write-Success "Git is installed: $gitVer"
-} else {
-    Write-WarningMsg "Git not found. Installing via winget..."
-    winget install --id Git.Git -e --source winget
-    Write-Success "Git installed."
-}
-
-# 3. Check Node.js (20+)
-Write-Step "Checking Node.js..."
-if (Check-Command "node") {
-    $nodeVer = node -v
-    $major = [int]($nodeVer -replace '^v', '').Split('.')[0]
-    if ($major -ge 20) {
-        Write-Success "Node.js is installed: $nodeVer"
-    } else {
-        Write-WarningMsg "Node.js version is $nodeVer (Requires 20+). Installing via winget..."
-        winget install --id OpenJS.NodeJS -e --source winget
-        Write-Success "Node.js installed. Please restart your terminal."
+$nodeVersion = $null
+try {
+    $nodeOutput = & node --version 2>$null
+    if ($nodeOutput -match 'v(\d+)\.') {
+        $nodeMajor = [int]$Matches[1]
+        $nodeVersion = $nodeOutput.Trim()
     }
+} catch {}
+
+if ($nodeVersion -and $nodeMajor -ge 20) {
+    Write-Host "  ✅ Node.js $nodeVersion (meets v20+ requirement)" -ForegroundColor Green
+} elseif ($nodeVersion) {
+    Write-Host "  ⚠️  Node.js $nodeVersion found but v20+ required. Upgrading..." -ForegroundColor Red
+    Write-Host "  Installing Node.js LTS via winget..." -ForegroundColor Yellow
+    winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --force
+    $installed += "Node.js LTS (upgraded)"
 } else {
-    Write-WarningMsg "Node.js not found. Installing via winget..."
-    winget install --id OpenJS.NodeJS -e --source winget
-    Write-Success "Node.js installed. Please restart your terminal."
+    Write-Host "  ❌ Node.js not found. Installing..." -ForegroundColor Red
+    winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+    $installed += "Node.js LTS"
 }
 
-# 4. Check Python (3.11+)
-Write-Step "Checking Python..."
-if (Check-Command "python") {
-    $pyVer = python --version
-    Write-Success "Python is installed: $pyVer"
+# ----------------------------------------------------------------------------
+# 2. NPM (comes with Node, but verify)
+# ----------------------------------------------------------------------------
+Write-Host "[2/5] Checking npm..." -ForegroundColor Yellow
+
+$npmVersion = $null
+try {
+    $npmVersion = & npm --version 2>$null
+} catch {}
+
+if ($npmVersion) {
+    Write-Host "  ✅ npm v$($npmVersion.Trim())" -ForegroundColor Green
 } else {
-    Write-WarningMsg "Python not found. Installing via winget..."
-    winget install --id Python.Python.3.11 -e --source winget
-    Write-Success "Python installed."
+    Write-Host "  ⚠️  npm not found — will be available after Node.js install + terminal restart" -ForegroundColor Red
+    $issues += "Restart terminal after Node.js install to get npm"
 }
 
-# 5. Check C++ Build Tools
-Write-Step "Checking C++ Build Tools..."
+# ----------------------------------------------------------------------------
+# 3. GIT
+# ----------------------------------------------------------------------------
+Write-Host "[3/5] Checking Git..." -ForegroundColor Yellow
+
+$gitVersion = $null
+try {
+    $gitOutput = & git --version 2>$null
+    if ($gitOutput -match 'git version (.+)') {
+        $gitVersion = $Matches[1].Trim()
+    }
+} catch {}
+
+if ($gitVersion) {
+    Write-Host "  ✅ Git $gitVersion" -ForegroundColor Green
+} else {
+    Write-Host "  ❌ Git not found. Installing..." -ForegroundColor Red
+    winget install Git.Git --accept-source-agreements --accept-package-agreements
+    $installed += "Git"
+}
+
+# ----------------------------------------------------------------------------
+# 4. PYTHON 3.11+ (needed for better-sqlite3 native build)
+# ----------------------------------------------------------------------------
+Write-Host "[4/5] Checking Python..." -ForegroundColor Yellow
+
+$pythonVersion = $null
+$pythonMajor = 0
+$pythonMinor = 0
+try {
+    $pythonOutput = & python --version 2>$null
+    if ($pythonOutput -match 'Python (\d+)\.(\d+)') {
+        $pythonMajor = [int]$Matches[1]
+        $pythonMinor = [int]$Matches[2]
+        $pythonVersion = $pythonOutput.Trim()
+    }
+} catch {}
+
+if (-not $pythonVersion) {
+    # Try python3 alias
+    try {
+        $pythonOutput = & python3 --version 2>$null
+        if ($pythonOutput -match 'Python (\d+)\.(\d+)') {
+            $pythonMajor = [int]$Matches[1]
+            $pythonMinor = [int]$Matches[2]
+            $pythonVersion = $pythonOutput.Trim()
+        }
+    } catch {}
+}
+
+if ($pythonVersion -and $pythonMajor -ge 3 -and $pythonMinor -ge 11) {
+    Write-Host "  ✅ $pythonVersion (meets 3.11+ requirement)" -ForegroundColor Green
+} elseif ($pythonVersion) {
+    Write-Host "  ⚠️  $pythonVersion found but 3.11+ required. Installing..." -ForegroundColor Red
+    winget install Python.Python.3.11 --accept-source-agreements --accept-package-agreements
+    $installed += "Python 3.11 (upgraded)"
+} else {
+    Write-Host "  ❌ Python not found. Installing..." -ForegroundColor Red
+    winget install Python.Python.3.11 --accept-source-agreements --accept-package-agreements
+    $installed += "Python 3.11"
+}
+
+# ----------------------------------------------------------------------------
+# 5. C++ BUILD TOOLS (needed for native Node modules like better-sqlite3)
+# ----------------------------------------------------------------------------
+Write-Host "[5/5] Checking C++ Build Tools..." -ForegroundColor Yellow
+
+$hasBuildTools = $false
+
+# Check for Visual Studio Build Tools or full Visual Studio
 $vsWherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $vsWherePath) {
-    $tools = & $vsWherePath -latest -requires Microsoft.VisualStudio.Workload.VCTools -property installationPath
-    if ($tools) {
-        Write-Success "C++ Build Tools are installed at: $tools"
-    } else {
-        Write-WarningMsg "Visual Studio Installer found, but C++ Build Tools workload is missing."
-        Write-WarningMsg "Please open Visual Studio Installer, modify your installation, and check 'Desktop development with C++'."
+    $vsInstalls = & $vsWherePath -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    if ($vsInstalls) {
+        $hasBuildTools = $true
     }
-} else {
-    Write-WarningMsg "C++ Build Tools not found."
-    Write-WarningMsg "Installing Visual Studio Build Tools via winget..."
-    winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget
-    Write-WarningMsg "ACTION REQUIRED: Open Visual Studio Installer and ensure 'Desktop development with C++' is checked."
 }
 
-Write-Host "`n=======================================================" -ForegroundColor Cyan
-Write-Host "  Setup checks complete. Please review any warnings above." -ForegroundColor Cyan
-Write-Host "  If Node or Python was installed, restart your terminal." -ForegroundColor Cyan
-Write-Host "=======================================================" -ForegroundColor Cyan
+# Also check via registry for standalone build tools
+if (-not $hasBuildTools) {
+    $regPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC",
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\15.0\VC",
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\16.0\VC",
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\17.0\VC"
+    )
+    foreach ($path in $regPaths) {
+        if (Test-Path $path) {
+            $hasBuildTools = $true
+            break
+        }
+    }
+}
+
+# Check if node-gyp can find a compiler
+if (-not $hasBuildTools) {
+    try {
+        $msbuildPath = & where.exe MSBuild.exe 2>$null
+        if ($msbuildPath) { $hasBuildTools = $true }
+    } catch {}
+}
+
+if ($hasBuildTools) {
+    Write-Host "  ✅ C++ Build Tools detected" -ForegroundColor Green
+} else {
+    Write-Host "  ❌ C++ Build Tools not found." -ForegroundColor Red
+    Write-Host "  Installing Visual Studio Build Tools (Desktop C++ workload)..." -ForegroundColor Yellow
+    Write-Host "  This may take 5-10 minutes and requires ~4GB disk space." -ForegroundColor Yellow
+    Write-Host ""
+
+    # Try winget first
+    $wingetResult = winget install Microsoft.VisualStudio.2022.BuildTools --accept-source-agreements --accept-package-agreements --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "  ⚠️  Automatic install may have failed." -ForegroundColor Red
+        Write-Host "  Manual fallback:" -ForegroundColor Yellow
+        Write-Host "    1. Go to: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
+        Write-Host "    2. Download Build Tools for Visual Studio 2022" -ForegroundColor White
+        Write-Host "    3. In installer, check 'Desktop development with C++'" -ForegroundColor White
+        Write-Host "    4. Click Install" -ForegroundColor White
+        Write-Host ""
+        $issues += "C++ Build Tools need manual install (see instructions above)"
+    } else {
+        $installed += "Visual Studio 2022 Build Tools (C++ workload)"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 6. VS CODE (bonus check)
+# ----------------------------------------------------------------------------
+Write-Host ""
+Write-Host "[Bonus] Checking VS Code..." -ForegroundColor Yellow
+
+$hasVSCode = $false
+try {
+    $codeOutput = & code --version 2>$null
+    if ($codeOutput) { $hasVSCode = $true }
+} catch {}
+
+if ($hasVSCode) {
+    $codeVer = ($codeOutput -split "`n")[0]
+    Write-Host "  ✅ VS Code $codeVer" -ForegroundColor Green
+} else {
+    Write-Host "  ❌ VS Code not found. Installing..." -ForegroundColor Red
+    winget install Microsoft.VisualStudioCode --accept-source-agreements --accept-package-agreements
+    $installed += "VS Code"
+}
+
+# ----------------------------------------------------------------------------
+# 7. VS CODE EXTENSIONS (install required ones)
+# ----------------------------------------------------------------------------
+Write-Host ""
+Write-Host "[Extensions] Installing required VS Code extensions..." -ForegroundColor Yellow
+
+$extensions = @(
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "pmneo.tsimporter",
+    "esbenp.prettier-vscode",
+    "qwtel.sqlite-viewer",
+    "usernamehw.errorlens"
+)
+
+if ($hasVSCode -or (Get-Command code -ErrorAction SilentlyContinue)) {
+    foreach ($ext in $extensions) {
+        $extName = $ext.Split(".")[-1]
+        Write-Host "  Installing $extName..." -ForegroundColor Gray -NoNewline
+        $result = & code --install-extension $ext --force 2>&1
+        if ($result -match "already installed" -or $result -match "successfully installed") {
+            Write-Host " ✅" -ForegroundColor Green
+        } else {
+            Write-Host " ⚠️" -ForegroundColor Yellow
+        }
+    }
+} else {
+    Write-Host "  ⚠️  VS Code CLI not available yet. Restart terminal, then run:" -ForegroundColor Yellow
+    foreach ($ext in $extensions) {
+        Write-Host "    code --install-extension $ext" -ForegroundColor White
+    }
+    $issues += "VS Code extensions need manual install after terminal restart"
+}
+
+# ----------------------------------------------------------------------------
+# 8. SET EXECUTION POLICY (for npm scripts)
+# ----------------------------------------------------------------------------
+Write-Host ""
+Write-Host "[Policy] Checking PowerShell execution policy..." -ForegroundColor Yellow
+
+$policy = Get-ExecutionPolicy -Scope CurrentUser
+if ($policy -eq "Restricted") {
+    Write-Host "  Setting execution policy to RemoteSigned..." -ForegroundColor Yellow
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+    Write-Host "  ✅ Execution policy updated" -ForegroundColor Green
+} else {
+    Write-Host "  ✅ Execution policy: $policy" -ForegroundColor Green
+}
+
+# ----------------------------------------------------------------------------
+# SUMMARY
+# ----------------------------------------------------------------------------
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "  SUMMARY" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+
+if ($installed.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  Installed:" -ForegroundColor Green
+    foreach ($item in $installed) {
+        Write-Host "    + $item" -ForegroundColor Green
+    }
+}
+
+if ($issues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  Action Required:" -ForegroundColor Red
+    foreach ($issue in $issues) {
+        Write-Host "    ! $issue" -ForegroundColor Red
+    }
+}
+
+if ($installed.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  ⚠️  RESTART YOUR TERMINAL before proceeding." -ForegroundColor Yellow
+    Write-Host "  New installs won't be on PATH until you open a fresh terminal." -ForegroundColor Yellow
+}
+
+if ($issues.Count -eq 0 -and $installed.Count -eq 0) {
+    Write-Host ""
+    Write-Host "  ✅ All prerequisites satisfied. Ready to build." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "  Next steps:" -ForegroundColor Cyan
+Write-Host "    1. Open a NEW PowerShell terminal" -ForegroundColor White
+Write-Host "    2. cd C:\Users\kjrpu\Documents\2. LI\Claude" -ForegroundColor White
+Write-Host "    3. git clone https://github.com/steadycalls/Campaign-Success-Local.git" -ForegroundColor White
+Write-Host "    4. cd Campaign-Success-Local" -ForegroundColor White
+Write-Host "    5. code ." -ForegroundColor White
+Write-Host ""
