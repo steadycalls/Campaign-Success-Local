@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('db:createContact', data),
   getContactsByEmails: (emails: string[]) =>
     ipcRenderer.invoke('db:getContactsByEmails', emails),
+  getMeetingsForEmails: (emails: string[], limit?: number) =>
+    ipcRenderer.invoke('db:getMeetingsForEmails', emails, limit),
   getMessages: (contactId: string) =>
     ipcRenderer.invoke('db:getMessages', contactId),
   getContactMessageSyncStatus: (companyId: string) =>
@@ -23,6 +25,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('company:getCustomFields', companyId),
   getAllCustomFields: () =>
     ipcRenderer.invoke('company:getAllCustomFields'),
+  getRICustomFields: () =>
+    ipcRenderer.invoke('db:getRICustomFields'),
+  getRIClientMessageStats: () =>
+    ipcRenderer.invoke('db:getRIClientMessageStats'),
 
   // ── DB: Meetings ────────────────────────────────────────────────────
   getMeetings: (companyId: string) =>
@@ -156,6 +162,12 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('gmail:linkToCompany', emailId, companyId),
   gmailGetStats: () =>
     ipcRenderer.invoke('gmail:getStats'),
+  gmailGetAll: (limit?: number, offset?: number) =>
+    ipcRenderer.invoke('gmail:getAll', limit, offset),
+  onGmailSyncProgress: (cb: (...args: unknown[]) => void) =>
+    ipcRenderer.on('gmail:syncProgress', cb),
+  offGmailSyncProgress: (cb: (...args: unknown[]) => void) =>
+    ipcRenderer.removeListener('gmail:syncProgress', cb),
 
   // ── Google Accounts ───────────────────────────────────────────────
   googleListAccounts: () =>
@@ -277,6 +289,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('subaccount:sync', companyId),
   refreshSubAccountList: () =>
     ipcRenderer.invoke('subaccount:refreshList'),
+  exportSubAccountData: () =>
+    ipcRenderer.invoke('subaccount:exportData'),
 
   // ── CSV bulk upload ─────────────────────────────────────────────────
   matchLocationIds: (ids: string[]) =>
@@ -392,6 +406,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('calendar:linkEvent', eventId, companyId),
   checkGoogleScopes: () => ipcRenderer.invoke('google:checkScopes'),
   getCalendarStats: () => ipcRenderer.invoke('calendar:getStats'),
+  getAllCalendarEvents: (limit?: number) => ipcRenderer.invoke('calendar:getAllEvents', limit),
+  onCalendarSyncProgress: (cb: (...args: unknown[]) => void) =>
+    ipcRenderer.on('calendar:syncProgress', cb),
+  offCalendarSyncProgress: (cb: (...args: unknown[]) => void) =>
+    ipcRenderer.removeListener('calendar:syncProgress', cb),
 
   // ── Morning Briefing ──────────────────────────────────────────────────
   getSlaViolations: () => ipcRenderer.invoke('briefing:getSlaViolations'),

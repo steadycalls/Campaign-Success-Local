@@ -3,6 +3,28 @@ import { Loader2, RefreshCw, Copy, Check, ExternalLink } from 'lucide-react';
 import { api } from '../../lib/ipc';
 import type { SubAccount } from '../../types';
 
+function StatChip({ label, value }: { label: string; value: number }) {
+  const isZero = value === 0;
+  return (
+    <span className={isZero ? 'text-red-500 dark:text-red-400 font-medium' : 'text-slate-400 dark:text-slate-500'}>
+      {value.toLocaleString()} {label}
+    </span>
+  );
+}
+
+function CopyNameButton({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(name); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      className="inline-flex items-center gap-0.5 rounded border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0 transition-colors"
+      title={copied ? 'Copied!' : 'Copy name'}
+    >
+      {copied ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+    </button>
+  );
+}
+
 const statusConfig: Record<string, { dot: string; label: string }> = {
   valid: { dot: 'bg-green-500', label: 'Valid' },
   invalid: { dot: 'bg-red-500', label: 'Invalid' },
@@ -92,22 +114,26 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
           {account.ghl_location_id && (
             <button
               onClick={() => api.openInChrome(`https://app.gohighlevel.com/v2/location/${account.ghl_location_id}/settings/private-integrations`)}
-              className="inline-flex items-center gap-0.5 rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 hover:bg-teal-100 hover:border-teal-300 flex-shrink-0 transition-colors"
+              className="inline-flex items-center gap-0.5 rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 hover:bg-teal-100 hover:border-teal-300 flex-shrink-0 transition-colors dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-400"
               title="Open PIT settings in GHL (Chrome)"
             >
               <ExternalLink size={10} />
               GHL
             </button>
           )}
+          <CopyNameButton name={account.name} />
         </div>
-        {(account.contacts_api_total || account.contact_count > 0) && (
-          <div className="text-[10px] text-slate-400 dark:text-slate-500">
-            {account.contacts_api_total
-              ? `${account.contacts_api_total.toLocaleString()} contacts`
-              : `${account.contact_count.toLocaleString()} contacts`}
-            {account.phone_numbers_count > 0 && ` \u00b7 ${account.phone_numbers_count} phones`}
-            {account.users_count > 0 && ` \u00b7 ${account.users_count} users`}
-            {account.workflows_count > 0 && ` \u00b7 ${account.workflows_count} workflows`}
+        {account.pit_status === 'valid' && (
+          <div className="text-[10px] flex items-center gap-1 flex-wrap mt-0.5">
+            <StatChip label="contacts" value={account.contacts_api_total ?? account.contact_count} />
+            <span className="text-slate-300 dark:text-slate-600">&middot;</span>
+            <StatChip label="phones" value={account.phone_numbers_count} />
+            <span className="text-slate-300 dark:text-slate-600">&middot;</span>
+            <StatChip label="users" value={account.users_count} />
+            <span className="text-slate-300 dark:text-slate-600">&middot;</span>
+            <StatChip label="workflows" value={account.workflows_count} />
+            <span className="text-slate-300 dark:text-slate-600">&middot;</span>
+            <StatChip label="funnels" value={account.funnels_count} />
           </div>
         )}
       </td>

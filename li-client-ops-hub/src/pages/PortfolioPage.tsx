@@ -66,7 +66,18 @@ function sortCompanies(companies: Company[], key: SortKey, dir: SortDir, period:
   });
 }
 
-function ContactsCell({ synced, apiTotal }: { synced: number; apiTotal: number | null }) {
+function formatSyncDatePST(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      month: '2-digit', day: '2-digit', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZone: 'America/Los_Angeles',
+    }).replace(',', '') + ' PST';
+  } catch { return ''; }
+}
+
+function ContactsCell({ synced, apiTotal, lastSyncAt }: { synced: number; apiTotal: number | null; lastSyncAt?: string | null }) {
   if (!apiTotal && synced === 0) return <span className="text-slate-400 dark:text-slate-500">&mdash;</span>;
   if (!apiTotal) return <span className="text-slate-600 dark:text-slate-400">{synced.toLocaleString()}</span>;
   const pct = apiTotal > 0 ? Math.round((synced / apiTotal) * 100) : 0;
@@ -86,7 +97,11 @@ function ContactsCell({ synced, apiTotal }: { synced: number; apiTotal: number |
           <span className="text-[10px] text-slate-400 dark:text-slate-500">{pct}%</span>
         </div>
       )}
-      {full && <span className="text-[10px] text-green-600 dark:text-green-400">&check; synced</span>}
+      {full && (
+        <div className="text-[10px] text-green-600 dark:text-green-400">
+          <span>&#10003; {lastSyncAt ? formatSyncDatePST(lastSyncAt) : 'synced'}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -351,7 +366,7 @@ function VirtualTable({
                 })()}
               </td>
               <td className="px-4 py-3"><SLABadge status={c.sla_status} days={c.sla_days_since_contact} /></td>
-              <td className="px-4 py-3"><ContactsCell synced={liveSynced} apiTotal={liveTotal} /></td>
+              <td className="px-4 py-3"><ContactsCell synced={liveSynced} apiTotal={liveTotal} lastSyncAt={c.last_sync_at} /></td>
               <td className="px-4 py-3">
                 {newCount > 0 ? (
                   <span className="text-green-600 dark:text-green-400 font-medium">+{newCount.toLocaleString()}</span>

@@ -18,6 +18,7 @@ import {
   syncCustomFields,
   syncPipelines,
   syncOpportunities,
+  syncPhoneNumbers,
   computeContactSLA,
   updateContactSLA,
   updateCompanySLA,
@@ -271,6 +272,7 @@ export async function syncCompany(
       ['sites', 'Sites', () => syncSites(locationId, companyId, pit)],
       ['templates', 'Email templates', () => syncEmailTemplates(locationId, companyId, pit)],
       ['fields', 'Custom fields', () => syncCustomFields(locationId, companyId, pit)],
+      ['phones', 'Phone numbers', () => syncPhoneNumbers(locationId, companyId, pit)],
     ];
 
     for (let i = 0; i < metaPhases.length; i++) {

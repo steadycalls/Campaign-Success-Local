@@ -78,6 +78,9 @@ function matchToCompany(domains: string[]): { companyId: string | null; matchMet
 export async function syncMeetingsList(
   syncWindowDays: number = 30
 ): Promise<SyncCounts> {
+  // Pre-check auth
+  await getValidReadAiToken();
+
   const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
   const windowStart = Date.now() - syncWindowDays * 86400000;
   let cursor: string | null = null;
@@ -206,6 +209,15 @@ export async function expandMeetingDetails(
 ): Promise<SyncCounts> {
   const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
 
+  // Pre-check auth before starting the loop — fail fast instead of per-meeting
+  try {
+    await getValidReadAiToken();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn('ReadAI', 'Skipping expand — not authorized', { error: msg });
+    throw new Error(`Read.ai not authorized: ${msg}`);
+  }
+
   const unexpanded = queryAll(
     `SELECT id, readai_meeting_id, company_id FROM meetings WHERE expanded = 0 ORDER BY start_time_ms DESC LIMIT ?`,
     [batchSize]
@@ -268,7 +280,12 @@ export async function expandMeetingDetails(
 
       counts.updated++;
     } catch (err: unknown) {
-      logger.error('ReadAI', 'Failed to expand meeting', { readai_id: readaiId, error: err instanceof Error ? err.message : String(err) });
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('ReadAI', 'Failed to expand meeting', { readai_id: readaiId, error: msg });
+      // Bail out on auth errors — no point trying remaining meetings
+      if (msg.includes('not authorized') || msg.includes('Token refresh failed')) {
+        throw err;
+      }
     }
 
     await delay(1000);
@@ -361,6 +378,9 @@ export async function syncReadAiMeetingsRange(options: {
   cursor?: string | null;
   maxPages?: number;
 } = {}): Promise<SyncRangeResult> {
+  // Pre-check auth
+  await getValidReadAiToken();
+
   const { sinceDate, cursor: startCursor = null, maxPages = MAX_PAGES_PER_RUN } = options;
   const result: SyncRangeResult = {
     fetched: 0, created: 0, updated: 0,

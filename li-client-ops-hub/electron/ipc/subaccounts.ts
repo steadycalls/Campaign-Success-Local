@@ -44,6 +44,15 @@ export function registerSubAccountHandlers(): void {
     return queryAll(sql, params);
   });
 
+  // Export sub-accounts with PITs (for CSV/Sheets export)
+  ipcMain.handle('subaccount:exportData', () => {
+    return queryAll(`
+      SELECT ghl_location_id, name, pit_token, pit_status
+      FROM companies
+      ORDER BY name ASC
+    `);
+  });
+
   // Check if PIT exists (without exposing token)
   ipcMain.handle('subaccount:hasPit', (_e, companyId: string) => {
     const row = queryOne('SELECT pit_token FROM companies WHERE id = ?', [companyId]);

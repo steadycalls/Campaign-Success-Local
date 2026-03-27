@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { delay } from '../utils/rateLimit';
 import { type SyncCounts } from '../utils/logger';
-import { refreshGoogleToken } from './gdrive-auth';
+import { getGoogleToken } from './google-token';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -14,42 +14,8 @@ const GENERIC_DOMAINS = new Set([
   'live.com', 'msn.com', 'me.com', 'logicinbound.com',
 ]);
 
-function getEnvValue(key: string): string {
-  return process.env[key] || '';
-}
-
-// ── Token management (reuses gdrive-auth refresh) ────────────────────
-
-async function getValidAccessToken(): Promise<string> {
-  const auth = queryOne(
-    'SELECT access_token, refresh_token, expires_at FROM google_auth WHERE id = ?',
-    ['default']
-  );
-
-  if (!auth?.access_token || !auth?.refresh_token) {
-    throw new Error('Google not authorized. Go to Settings > Integrations to authorize.');
-  }
-
-  const expiresAt = new Date(auth.expires_at as string).getTime();
-  const now = Date.now();
-
-  if (now >= expiresAt - 300_000) {
-    const clientId = getEnvValue('GOOGLE_CLIENT_ID');
-    const clientSecret = getEnvValue('GOOGLE_CLIENT_SECRET');
-    const refreshed = await refreshGoogleToken(clientId, clientSecret, auth.refresh_token as string);
-    const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
-    execute(
-      `UPDATE google_auth SET access_token = ?, expires_at = ?, updated_at = datetime('now') WHERE id = 'default'`,
-      [refreshed.access_token, newExpiresAt]
-    );
-    return refreshed.access_token;
-  }
-
-  return auth.access_token as string;
-}
-
-async function calFetch(path: string, params?: Record<string, string>): Promise<unknown> {
-  const token = await getValidAccessToken();
+async function calFetch(path: string, params?: Record<string, string>, userEmail?: string): Promise<unknown> {
+  const token = await getGoogleToken('calendar', userEmail);
   const url = new URL(`${CALENDAR_API_BASE}${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
@@ -72,9 +38,9 @@ async function calFetch(path: string, params?: Record<string, string>): Promise<
 
 // ── Sync calendar list ───────────────────────────────────────────────
 
-export async function syncCalendarList(): Promise<SyncCounts> {
+export async function syncCalendarList(userEmail?: string): Promise<SyncCounts> {
   const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
-  const data = await calFetch('/users/me/calendarList') as { items?: Array<Record<string, unknown>> };
+  const data = await calFetch('/users/me/calendarList', undefined, userEmail) as { items?: Array<Record<string, unknown>> };
   const calendars = data.items ?? [];
   const now = new Date().toISOString();
 
@@ -112,22 +78,45 @@ export async function syncCalendarList(): Promise<SyncCounts> {
 
 // ── Sync events ──────────────────────────────────────────────────────
 
+export type CalSyncProgressCallback = (data: {
+  calendarName: string;
+  calendarIndex: number;
+  calendarTotal: number;
+  eventsFound: number;
+  eventsCreated: number;
+  percent: number;
+}) => void;
+
 export async function syncCalendarEvents(options: {
   daysBack?: number;
   daysForward?: number;
+  onProgress?: CalSyncProgressCallback;
+  userEmail?: string;
 } = {}): Promise<SyncCounts> {
   const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
   const daysBack = options.daysBack ?? 30;
   const daysForward = options.daysForward ?? 14;
+  const onProgress = options.onProgress;
+  const userEmail = options.userEmail;
 
   const timeMin = new Date(Date.now() - daysBack * 86400000).toISOString();
   const timeMax = new Date(Date.now() + daysForward * 86400000).toISOString();
 
   const calendars = queryAll('SELECT google_calendar_id, name FROM google_calendars WHERE selected = 1');
 
-  for (const cal of calendars) {
+  for (let ci = 0; ci < calendars.length; ci++) {
+    const cal = calendars[ci];
     const calId = cal.google_calendar_id as string;
     const calName = cal.name as string;
+
+    onProgress?.({
+      calendarName: calName,
+      calendarIndex: ci,
+      calendarTotal: calendars.length,
+      eventsFound: counts.found,
+      eventsCreated: counts.created,
+      percent: Math.round((ci / calendars.length) * 100),
+    });
     let pageToken: string | null = null;
 
     do {
@@ -136,7 +125,7 @@ export async function syncCalendarEvents(options: {
       };
       if (pageToken) params.pageToken = pageToken;
 
-      const data = await calFetch(`/calendars/${encodeURIComponent(calId)}/events`, params) as {
+      const data = await calFetch(`/calendars/${encodeURIComponent(calId)}/events`, params, userEmail) as {
         items?: Array<Record<string, unknown>>;
         nextPageToken?: string;
       };

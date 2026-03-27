@@ -111,14 +111,42 @@ export function registerAssociationHandlers(): void {
   ipcMain.handle('clients:getAll', () => {
     return queryAll(
       `SELECT c.*,
-        (SELECT GROUP_CONCAT(ca.association_type || ':' || COALESCE(ca.target_name, ''), '|')
-         FROM client_associations ca WHERE ca.client_contact_id = c.id) as associations_summary,
+        (SELECT GROUP_CONCAT(ca2.association_type || ':' || COALESCE(ca2.target_name, ''), '|')
+         FROM client_associations ca2 WHERE ca2.client_contact_id = c.id) as associations_summary,
         (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id) as message_count,
         (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.message_at >= datetime('now', '-7 days')) as msgs_7d,
         (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.message_at >= datetime('now', '-30 days')) as msgs_30d,
-        co.name as ghl_company_name
+        CASE WHEN c.company_name IS NOT NULL AND c.company_name != '' AND LOWER(c.company_name) != 'restoration inbound'
+          THEN c.company_name ELSE NULL END as ghl_company_name,
+        co.ghl_location_id,
+        sa.target_id as linked_company_id,
+        -- Live days_since_outbound: GHL messages (direct) + meetings (by participant email or linked company)
+        CAST(
+          MIN(
+            -- Source 1: GHL outbound messages (linked directly to this contact)
+            COALESCE(JULIANDAY('now') - JULIANDAY((
+              SELECT MAX(m.message_at) FROM messages m
+              WHERE m.contact_id = c.id AND m.direction = 'outbound'
+            )), 9999),
+            -- Source 2: Meetings where this contact's email appears in participants
+            COALESCE(JULIANDAY('now') - JULIANDAY((
+              SELECT MAX(mt.meeting_date) FROM meetings mt
+              WHERE mt.meeting_date <= datetime('now')
+                AND (mt.participants_json LIKE '%' || REPLACE(c.email, '''', '') || '%'
+                     OR mt.company_id = sa.target_id)
+            )), 9999),
+            -- Source 3: Calendar events where contact's email is an attendee
+            COALESCE(JULIANDAY('now') - JULIANDAY((
+              SELECT MAX(ce.start_time) FROM calendar_events ce
+              WHERE ce.start_time <= datetime('now')
+                AND (ce.attendees_json LIKE '%' || REPLACE(c.email, '''', '') || '%'
+                     OR ce.company_id = sa.target_id)
+            )), 9999)
+          ) AS INTEGER
+        ) as days_since_outbound
        FROM contacts c
        LEFT JOIN companies co ON co.id = c.company_id
+       LEFT JOIN client_associations sa ON sa.client_contact_id = c.id AND sa.association_type = 'sub_account'
        WHERE c.tags LIKE '%client%'
        ORDER BY c.first_name ASC, c.last_name ASC`
     );
@@ -397,11 +425,12 @@ export function registerAssociationHandlers(): void {
       "SELECT client_contact_id, target_id as email FROM client_associations WHERE association_type = 'readai_email'"
     );
     const meetingCountMap: Record<string, number> = {};
+    const lastMeetingDateMap: Record<string, string> = {};
     for (const a of allReadaiAssocs) {
       const email = (a.email as string).toLowerCase();
       const clientId = a.client_contact_id as string;
       const meetings = queryAll(
-        'SELECT participants_json FROM meetings WHERE participants_json LIKE ?',
+        'SELECT participants_json, meeting_date FROM meetings WHERE participants_json LIKE ? ORDER BY meeting_date DESC',
         [`%${email}%`]
       );
       let count = 0;
@@ -410,6 +439,10 @@ export function registerAssociationHandlers(): void {
           const participants = JSON.parse((m.participants_json as string) || '[]');
           if (participants.some((p: { email?: string }) => p.email?.toLowerCase() === email)) {
             count++;
+            const mDate = m.meeting_date as string;
+            if (mDate && (!lastMeetingDateMap[clientId] || mDate > lastMeetingDateMap[clientId])) {
+              lastMeetingDateMap[clientId] = mDate;
+            }
           }
         } catch { /* skip */ }
       }
@@ -444,6 +477,7 @@ export function registerAssociationHandlers(): void {
         associations: map,
         readai_emails: readaiEmails,
         readai_meeting_count: meetingCountMap[c.id as string] || 0,
+        last_meeting_date: lastMeetingDateMap[c.id as string] || null,
       };
     });
   });

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Fragment, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, X, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Loader2, Users, FileText, Download, Table2, Check, Link2, LinkIcon, ClipboardCopy, Share2, Unlink } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Loader2, Users, FileText, Download, Table2, Check, Link2, LinkIcon, ClipboardCopy, Share2, Unlink, Info } from 'lucide-react';
 import { api } from '../lib/ipc';
 import type { Meeting, ReadAiSyncState, ReadAiOvernightStatus } from '../types';
 
@@ -19,6 +19,7 @@ interface ContactMatch {
   first_name: string | null;
   last_name: string | null;
   ghl_location_id: string | null;
+  assigned_to_name: string | null;
 }
 
 interface MeetingRow extends Meeting {
@@ -233,13 +234,35 @@ function ParticipantsCell({ participants, contactMap }: {
     }
   };
 
+  // Check if a participant is the GHL contact owner for any contact in this meeting
+  const isContactOwner = (participantName: string, participantEmail: string): boolean => {
+    if (!participantName) return false;
+    const pNameLower = participantName.toLowerCase();
+    for (const [, contact] of contactMap) {
+      if (contact.assigned_to_name && contact.assigned_to_name.toLowerCase() === pNameLower) return true;
+    }
+    // Also check by email match against assigned_to_name
+    if (participantEmail) {
+      const emailPrefix = participantEmail.split('@')[0].toLowerCase().replace(/[._]/g, ' ');
+      for (const [, contact] of contactMap) {
+        if (contact.assigned_to_name) {
+          const ownerLower = contact.assigned_to_name.toLowerCase();
+          if (ownerLower.includes(emailPrefix) || emailPrefix.includes(ownerLower)) return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // Inline display: show names colored by link status
   const displayNames = participants.slice(0, 3).map((p, i) => {
     const isLinked = p.email && contactMap.has(p.email.toLowerCase());
+    const isCO = isContactOwner(p.name, p.email);
     return (
       <span key={i}>
         {i > 0 && <span className="text-slate-400">, </span>}
         <span className={isLinked ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>{p.name}</span>
+        {isCO && <span className="text-amber-500 dark:text-amber-400 ml-0.5" title="GHL Contact Owner">(CO)</span>}
       </span>
     );
   });
@@ -268,6 +291,7 @@ function ParticipantsCell({ participants, contactMap }: {
             const contact = p.email ? contactMap.get(p.email.toLowerCase()) : undefined;
             const isLinked = !!contact?.ghl_contact_id && !!contact?.ghl_location_id;
             const isCopied = copiedEmail === p.email;
+            const isCO = isContactOwner(p.name, p.email);
             return (
               <div key={i} className="px-3 py-1.5 flex items-center gap-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-700">
                 {isLinked
@@ -281,10 +305,13 @@ function ParticipantsCell({ participants, contactMap }: {
                 >
                   {isCopied ? 'Copied!' : p.name}
                 </button>
+                {isCO && (
+                  <span className="shrink-0 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded cursor-default" title="GHL Contact Owner">CO</span>
+                )}
                 <div className="ml-auto flex items-center gap-1.5 shrink-0">
                   {isLinked && contact && (
                     <button onClick={(e) => handleOpenGhl(contact, e)}
-                      className="p-0.5 rounded hover:bg-green-50 text-green-600 hover:text-green-800"
+                      className="p-0.5 rounded hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
                       title="Open in GHL">
                       <ExternalLink size={12} />
                     </button>
@@ -586,6 +613,97 @@ function MeetingDetail({ meeting, onClose }: { meeting: MeetingRow; onClose: () 
 
 const PAGE_SIZE = 100;
 
+// ── Searchable Participant Dropdown ─────────────────────────────────
+
+function ParticipantSearchDropdown({ value, onChange, options }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase();
+    return options.filter(p => p.toLowerCase().includes(q));
+  }, [options, search]);
+
+  const handleSelect = (v: string) => {
+    onChange(v);
+    setSearch('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2.5 py-1.5 text-sm max-w-[220px] min-w-[160px]"
+      >
+        <Users size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />
+        <span className="truncate flex-1 text-left">{value || 'All Participants'}</span>
+        {value && (
+          <button onClick={(e) => { e.stopPropagation(); onChange(''); setSearch(''); }} className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <X size={12} />
+          </button>
+        )}
+        <ChevronDown size={12} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="p-2 border-b border-slate-100 dark:border-slate-700/50">
+            <div className="relative">
+              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search participants..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 py-1.5 pl-7 pr-2 text-xs focus:border-teal-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            <button
+              onClick={() => handleSelect('')}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 ${!value ? 'text-teal-600 dark:text-teal-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}
+            >
+              All Participants
+              {!value && <Check size={12} className="ml-auto text-teal-500" />}
+            </button>
+            {filtered.map((p) => (
+              <button
+                key={p}
+                onClick={() => handleSelect(p)}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 truncate ${value === p ? 'text-teal-600 dark:text-teal-400 font-medium' : 'text-slate-700 dark:text-slate-300'}`}
+              >
+                <span className="truncate">{p}</span>
+                {value === p && <Check size={12} className="ml-auto shrink-0 text-teal-500" />}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-3 py-3 text-xs text-slate-400 dark:text-slate-500 text-center">No participants found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MeetingsPage() {
   const [allMeetings, setAllMeetings] = useState<MeetingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -818,11 +936,7 @@ export default function MeetingsPage() {
               className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5 pl-8 pr-8 text-sm focus:border-teal-500 focus:outline-none" />
             {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X size={14} /></button>}
           </div>
-          <select value={participantFilter} onChange={e => setParticipantFilter(e.target.value)}
-            className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2.5 py-1.5 text-sm max-w-[200px]">
-            <option value="">All Participants</option>
-            {allParticipants.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <ParticipantSearchDropdown value={participantFilter} onChange={setParticipantFilter} options={allParticipants} />
           <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <span>From</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -853,7 +967,17 @@ export default function MeetingsPage() {
                 <th className="px-2 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center w-[4%]">Day</th>
                 <th className="px-2 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-[8%]">Date</th>
                 <th className="px-2 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-[8%]">Time</th>
-                <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-[22%]">Participants</th>
+                <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-[22%]">
+                  <span className="inline-flex items-center gap-1">
+                    Participants
+                    <span className="relative group">
+                      <Info size={11} className="text-slate-400 dark:text-slate-500 cursor-help" />
+                      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block bg-slate-800 dark:bg-slate-700 text-white text-[10px] font-normal normal-case tracking-normal px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap z-50">
+                        <span className="text-green-400">Green</span> = linked GHL contact &middot; <span className="text-red-400">Red</span> = not in GHL
+                      </span>
+                    </span>
+                  </span>
+                </th>
                 <th className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-[32%]">Summary</th>
                 <th className="px-1 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center w-[6%]">Actions</th>
               </tr>

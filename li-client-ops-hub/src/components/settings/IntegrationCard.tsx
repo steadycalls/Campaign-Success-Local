@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, Circle, Loader2, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle, XCircle, Circle, Loader2, ExternalLink, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/ipc';
 import type { Integration, ReadAiAuthStatus } from '../../types';
 import CredentialInput from './CredentialInput';
@@ -312,9 +313,38 @@ interface Props {
   onStatusChange: () => void;
 }
 
+// ── Google Service Section (replaces credential fields for Gmail/GDrive) ─
+
+function GoogleServiceSection({ authStatus }: { authStatus: { email: string | null; authorized_at: string | null; expires_at: string | null } | null }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="mt-4">
+      {authStatus?.email ? (
+        <div className="rounded bg-green-50 dark:bg-green-950/30 px-3 py-2 text-xs text-green-700 dark:text-green-400 mb-3">
+          Authorized as <span className="font-medium">{authStatus.email}</span>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
+          Not yet authorized. Set up authentication in the Google settings page.
+        </p>
+      )}
+      <button
+        onClick={() => navigate('/settings/google')}
+        className="flex items-center gap-1.5 rounded border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/30 px-3 py-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50"
+      >
+        Manage Google Auth
+        <ArrowRight size={12} />
+      </button>
+    </div>
+  );
+}
+
 export default function IntegrationCard({ integration, onStatusChange }: Props) {
   const envKeys: string[] = integration.env_keys ? JSON.parse(integration.env_keys) : [];
   const isGdrive = integration.name === 'gdrive';
+  const isGmail = integration.name === 'gmail';
+  const isGoogleService = isGdrive || isGmail;
   const isReadAi = integration.name === 'readai_api';
 
   const [values, setValues] = useState<Record<string, string>>({});
@@ -402,7 +432,9 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{integration.display_name}</h3>
           <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-            {isReadAi ? 'OAuth 2.1 integration for meeting data, summaries, transcripts, and recordings.' : integration.name}
+            {isReadAi ? 'OAuth 2.1 integration for meeting data, summaries, transcripts, and recordings.'
+              : isGoogleService ? 'Managed via Google Workspace auth. Uses OAuth or Service Account.'
+              : integration.name}
           </p>
         </div>
         <div className={`flex items-center gap-1 text-xs font-medium ${cfg.color}`}>
@@ -411,7 +443,11 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
         </div>
       </div>
 
-      {envKeys.length > 0 && (
+      {/* Google services: link to Google Auth page instead of credential fields */}
+      {isGoogleService && <GoogleServiceSection authStatus={authStatus} />}
+
+      {/* Standard credential fields (non-Google, non-ReadAi) */}
+      {!isGoogleService && envKeys.length > 0 && (
         <div className="mt-4 space-y-3">
           {envKeys.map((key) => (
             <CredentialInput key={key} label={key} value={values[key] ?? ''} hasValue={hasValues[key] ?? false} onChange={(v) => handleChange(key, v)} />
@@ -437,35 +473,20 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
         <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Last tested: {new Date(integration.last_tested_at).toLocaleString()}</p>
       )}
 
-      {/* Google Drive auth status */}
-      {isGdrive && authStatus?.email && (
-        <div className="mt-3 rounded bg-green-50 dark:bg-green-950/30 px-3 py-2 text-xs text-green-700 dark:text-green-400">
-          Authorized as <span className="font-medium">{authStatus.email}</span>
-          {authStatus.expires_at && (
-            <span className="text-green-600"> &middot; Token expires {new Date(authStatus.expires_at).toLocaleString()} (auto-refreshes)</span>
-          )}
-        </div>
-      )}
-
       {/* Read.ai OAuth section */}
       {isReadAi && (
         <ReadAiOAuthSection onStatusChange={onStatusChange} />
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {isGdrive && (
-          <button onClick={handleAuthorize} disabled={authorizing} className="flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40">
-            {authorizing && <Loader2 size={12} className="animate-spin" />}
-            Authorize Google Drive
-          </button>
-        )}
-        {!isReadAi && (
+      {/* Buttons — only for non-Google, non-ReadAi integrations */}
+      {!isGoogleService && !isReadAi && (
+        <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={handleTest} disabled={testing} className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
             {testing && <Loader2 size={12} className="animate-spin" />}
             Test Connection
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <DocLinkButton integrationName={integration.name} />
     </div>

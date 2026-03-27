@@ -432,7 +432,22 @@ function ChurnRiskCard({ companies, navigate }: { companies: ChurnRiskCompany[];
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase">Churn Risk ({companies.length})</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase">Churn Risk ({companies.length})</h3>
+          <span className="relative group">
+            <span className="text-red-400 dark:text-red-500 cursor-help text-xs">&#9432;</span>
+            <span className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block bg-slate-800 dark:bg-slate-700 text-white text-[10px] font-normal normal-case tracking-normal px-3 py-2 rounded shadow-lg w-64 z-50 leading-relaxed">
+              <strong>Churn Risk Score (0-100)</strong><br/>
+              Communication Gap: 25%<br/>
+              Meeting Cadence: 20%<br/>
+              Message Activity: 20%<br/>
+              Lead Flow: 15%<br/>
+              Budget Health: 10%<br/>
+              Health Trend: 10%<br/>
+              <span className="text-slate-400 mt-1 block">Higher = more likely to churn</span>
+            </span>
+          </span>
+        </div>
         <button onClick={() => navigate('/portfolio')} className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">View Portfolio &rarr;</button>
       </div>
       <div className="space-y-1.5">
@@ -582,19 +597,25 @@ export default function TodayPage() {
       {atRisk && atRisk.length > 0 && (
         <Section icon={Heart} title="At-Risk Clients" color="red" count={atRisk.length}>
           <div className="space-y-1.5">
-            {(atRisk as AtRiskCompany[]).map((company) => (
-              <div
-                key={company.id}
-                onClick={() => navigate(`/company/${company.id}`)}
-                className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-red-100/50 dark:hover:bg-red-900/30 cursor-pointer transition-colors"
-              >
-                <HealthBadge score={company.health_score} trend={company.health_trend} />
-                <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-1">{company.name}</span>
-                <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
-                  {getLowestComponent(company.health_components_json)}
-                </span>
-              </div>
-            ))}
+            {(atRisk as AtRiskCompany[]).map((company) => {
+              const clientName = formatContactName(company.client_first_name, company.client_last_name, '');
+              return (
+                <div
+                  key={company.id}
+                  onClick={() => navigate(`/company/${company.id}`)}
+                  className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-red-100/50 dark:hover:bg-red-900/30 cursor-pointer transition-colors"
+                >
+                  <HealthBadge score={company.health_score} trend={company.health_trend} />
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-1">
+                    {company.name}
+                    {clientName && <span className="text-slate-500 dark:text-slate-400 font-normal"> — {clientName}</span>}
+                  </span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
+                    {getLowestComponent(company.health_components_json)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Section>
       )}

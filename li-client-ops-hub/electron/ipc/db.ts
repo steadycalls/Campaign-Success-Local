@@ -91,13 +91,30 @@ export function registerDBHandlers(): void {
     return queryOne('SELECT * FROM contacts WHERE id = ?', [id]);
   });
 
+  // ── Recent meetings by participant emails (for Read.ai hover) ────
+  ipcMain.handle('db:getMeetingsForEmails', (_e, emails: string[], limit = 5) => {
+    if (!emails.length) return [];
+    const safeLimit = Math.min(Math.max(1, Number(limit) || 5), 20);
+    // Build OR conditions for each email in participants_json
+    const conditions = emails.map(() => `LOWER(COALESCE(m.participants_json,'')) LIKE ?`).join(' OR ');
+    const params = emails.map(e => `%${e.toLowerCase()}%`);
+    return queryAll(
+      `SELECT m.id, m.title, m.meeting_date, m.start_time_ms, m.report_url, m.readai_meeting_id, m.participants_count
+       FROM meetings m
+       WHERE (${conditions})
+       ORDER BY m.start_time_ms DESC
+       LIMIT ${safeLimit}`,
+      params
+    );
+  });
+
   // ── Contact lookup by emails (for meeting attendee linking) ──────
   ipcMain.handle('db:getContactsByEmails', (_e, emails: string[]) => {
     if (!emails.length) return [];
     const placeholders = emails.map(() => '?').join(',');
     return queryAll(
       `SELECT c.email, c.ghl_contact_id, c.first_name, c.last_name, c.company_id,
-              co.ghl_location_id
+              c.assigned_to_name, co.ghl_location_id
        FROM contacts c
        LEFT JOIN companies co ON c.company_id = co.id
        WHERE c.email IN (${placeholders})`,
@@ -243,6 +260,38 @@ export function registerDBHandlers(): void {
     );
   });
 
+  // ── RI Custom Fields (all from Restoration Inbound subaccount) ──────
+  ipcMain.handle('db:getRICustomFields', () => {
+    const RI_LOCATION_ID = process.env.RI_LOCATION_ID || 'g6zCuamu3IQlnY1ympGx';
+    return queryAll(`
+      SELECT cf.ghl_field_id as id, cf.name, cf.field_key, cf.data_type, cf.placeholder, cf.position, cf.model, cf.synced_at
+      FROM ghl_custom_fields cf
+      JOIN companies c ON c.id = cf.company_id
+      WHERE c.ghl_location_id = ?
+      ORDER BY cf.data_type ASC, cf.position ASC, cf.name ASC
+    `, [RI_LOCATION_ID]);
+  });
+
+  // ── RI Client Message Stats (contacts tagged "client" with message counts) ──
+  ipcMain.handle('db:getRIClientMessageStats', () => {
+    const RI_LOCATION_ID = process.env.RI_LOCATION_ID || 'g6zCuamu3IQlnY1ympGx';
+    return queryAll(`
+      SELECT
+        c.id, c.first_name, c.last_name, c.email, c.phone, c.ghl_contact_id,
+        co.ghl_location_id,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id) as total_messages,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.direction = 'inbound') as inbound_count,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.direction = 'outbound') as outbound_count,
+        (SELECT MAX(m.message_at) FROM messages m WHERE m.contact_id = c.id) as last_message_at,
+        (SELECT m.type FROM messages m WHERE m.contact_id = c.id ORDER BY m.message_at DESC LIMIT 1) as last_message_type,
+        (SELECT m.direction FROM messages m WHERE m.contact_id = c.id ORDER BY m.message_at DESC LIMIT 1) as last_message_direction
+      FROM contacts c
+      JOIN companies co ON co.id = c.company_id
+      WHERE co.ghl_location_id = ? AND c.tags LIKE '%client%'
+      ORDER BY total_messages DESC
+    `, [RI_LOCATION_ID]);
+  });
+
   // ── Meetings (expanded) ─────────────────────────────────────────────
   ipcMain.handle('meetings:getForCompany', (_e, companyId: string) => {
     return queryAll(
@@ -296,6 +345,7 @@ export function registerDBHandlers(): void {
   ipcMain.handle('db:getLinkedClient', (_e, companyId: string) => {
     return queryOne(`
       SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.ghl_contact_id,
+        c.company_name as contact_company_name,
         co.ghl_location_id
       FROM client_associations ca
       JOIN contacts c ON c.id = ca.client_contact_id
@@ -311,14 +361,15 @@ export function registerDBHandlers(): void {
     return queryAll(`
       SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.ghl_contact_id,
         c.company_id, c.company_name as contact_company_name, c.website as contact_website,
-        co.ghl_location_id, co.website as company_website
+        co.ghl_location_id, co.website as company_website, c.tags
       FROM contacts c
       LEFT JOIN companies co ON co.id = c.company_id
-      WHERE c.tags LIKE '%client%'
-        AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ?
+      WHERE (c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ?
              OR (c.first_name || ' ' || c.last_name) LIKE ?
              OR c.company_name LIKE ?)
-      ORDER BY c.first_name ASC
+      ORDER BY
+        CASE WHEN c.tags LIKE '%client%' THEN 0 ELSE 1 END,
+        c.first_name ASC
       LIMIT 20
     `, [q, q, q, q, q]);
   });

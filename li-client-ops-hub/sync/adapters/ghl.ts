@@ -501,23 +501,58 @@ function classifyDirection(msg: Record<string, unknown>): 'inbound' | 'outbound'
 }
 
 function updateContactMessageStats(contactDbId: string): void {
+  // 1. Latest outbound GHL message
   const outbound = queryOne(
     `SELECT MAX(message_at) as last_at FROM messages WHERE contact_id = ? AND direction = 'outbound'`,
     [contactDbId]
   );
+  const lastOutboundMsg = (outbound?.last_at as string) ?? null;
+
+  // 2. Latest Read.ai meeting with this client's company
+  const contact = queryOne('SELECT company_id FROM contacts WHERE id = ?', [contactDbId]);
+  let lastMeeting: string | null = null;
+  let lastCalEvent: string | null = null;
+
+  if (contact?.company_id) {
+    try {
+      const meeting = queryOne(
+        `SELECT MAX(meeting_date) as last_at FROM meetings WHERE company_id = ? AND meeting_date <= datetime('now')`,
+        [contact.company_id as string]
+      );
+      lastMeeting = (meeting?.last_at as string) ?? null;
+    } catch { /* meetings table may not exist */ }
+
+    // 3. Latest Google Calendar event with this client's company
+    try {
+      const calEvent = queryOne(
+        `SELECT MAX(start_time) as last_at FROM calendar_events WHERE company_id = ? AND start_time <= datetime('now')`,
+        [contact.company_id as string]
+      );
+      lastCalEvent = (calEvent?.last_at as string) ?? null;
+    } catch { /* calendar_events table may not exist */ }
+  }
+
+  // 4. Take the MOST RECENT across all sources
+  const candidates = [lastOutboundMsg, lastMeeting, lastCalEvent].filter(Boolean) as string[];
+  const lastContact = candidates.length > 0
+    ? candidates.reduce((a, b) => (a > b ? a : b))
+    : null;
+
+  // 5. Compute days since last contact (any source)
+  let daysSince = 9999;
+  if (lastContact) {
+    daysSince = Math.floor((Date.now() - new Date(lastContact).getTime()) / 86400000);
+  }
+
+  // 6. Track inbound for reference
   const inbound = queryOne(
     `SELECT MAX(message_at) as last_at FROM messages WHERE contact_id = ? AND direction = 'inbound'`,
     [contactDbId]
   );
-  const lastOutbound = (outbound?.last_at as string) ?? null;
-  const lastInbound = (inbound?.last_at as string) ?? null;
-  let daysSince = 9999;
-  if (lastOutbound) {
-    daysSince = Math.floor((Date.now() - new Date(lastOutbound).getTime()) / 86400000);
-  }
+
   execute(
     `UPDATE contacts SET last_outbound_at=?, last_inbound_at=?, days_since_outbound=?, updated_at=datetime('now') WHERE id=?`,
-    [lastOutbound, lastInbound, daysSince, contactDbId]
+    [lastContact, (inbound?.last_at as string) ?? null, daysSince, contactDbId]
   );
 }
 
@@ -1092,6 +1127,31 @@ export async function updateOpportunity(
     method: 'PUT',
     body: JSON.stringify(body),
   });
+}
+
+// ── Phone numbers sync ───────────────────────────────────────────────
+
+export async function syncPhoneNumbers(
+  locationId: string,
+  companyId: string,
+  pit: string
+): Promise<SyncCounts> {
+  const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
+  try {
+    const data = (await ghlFetch(
+      `/phone-number/search?locationId=${encodeURIComponent(locationId)}`,
+      pit
+    )) as { data?: unknown[] };
+    const phoneCount = data.data?.length ?? 0;
+    counts.found = phoneCount;
+    execute(
+      `UPDATE companies SET phone_numbers_count = ?, updated_at = datetime('now') WHERE id = ?`,
+      [phoneCount, companyId]
+    );
+  } catch (err: unknown) {
+    logger.warn('GHL', 'Phone numbers sync skipped', { company_id: companyId, error: err instanceof Error ? err.message : String(err) });
+  }
+  return counts;
 }
 
 // ── SLA computation ───────────────────────────────────────────────────

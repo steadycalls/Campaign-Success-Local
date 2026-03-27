@@ -79,6 +79,9 @@ export function registerSyncHandlers(): void {
           companyName,
           totalFound,
           totalCreated,
+          totalMessages: 0,
+          contactIndex: 0,
+          contactTotal: 0,
           percent: Math.round((i / (companies.length * 2)) * 100),
         });
 
@@ -113,14 +116,17 @@ export function registerSyncHandlers(): void {
 
         setCurrentCompanyContext(companyId);
 
-        if (i % 10 === 0) {
+        if (i % 5 === 0) {
           ipcBatcher.send('sync:contactsProgress', {
             phase: 'messages',
-            companyIndex: companies.length + Math.round((i / clientContacts.length) * companies.length),
-            companyTotal: companies.length * 2,
+            companyIndex: companies.length,
+            companyTotal: companies.length,
             companyName: (company.name as string) || '',
             totalFound,
             totalCreated,
+            totalMessages,
+            contactIndex: i,
+            contactTotal: clientContacts.length,
             percent: 50 + Math.round((i / clientContacts.length) * 50),
           });
         }
@@ -142,11 +148,14 @@ export function registerSyncHandlers(): void {
 
       ipcBatcher.send('sync:contactsProgress', {
         phase: 'complete',
-        companyIndex: companies.length * 2,
-        companyTotal: companies.length * 2,
+        companyIndex: companies.length,
+        companyTotal: companies.length,
         companyName: '',
         totalFound,
         totalCreated,
+        totalMessages,
+        contactIndex: clientContacts.length,
+        contactTotal: clientContacts.length,
         percent: 100,
       });
 

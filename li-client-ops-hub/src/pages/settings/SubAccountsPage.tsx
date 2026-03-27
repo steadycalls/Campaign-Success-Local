@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, Search, Loader2, ChevronUp, ChevronDown, Plus, X } from 'lucide-react';
+import { RefreshCw, Search, Loader2, ChevronUp, ChevronDown, Plus, X, Download, Table2, Check } from 'lucide-react';
 import { api } from '../../lib/ipc';
 import type { SubAccount } from '../../types';
 import SubAccountRow from '../../components/settings/SubAccountRow';
@@ -169,6 +169,29 @@ export default function SubAccountsPage() {
   }, [accounts, sortKey, sortDir]);
 
   const configured = accounts.filter((a) => a.pit_status !== 'not_configured').length;
+  const [sheetsCopied, setSheetsCopied] = useState(false);
+
+  const handleExportCsv = async () => {
+    const data = await (api as any).exportSubAccountData() as Array<Record<string, unknown>>;
+    const rows = [['Location ID', 'Name', 'PIT', 'Status']];
+    for (const r of data) rows.push([String(r.ghl_location_id ?? ''), String(r.name ?? ''), String(r.pit_token ?? ''), String(r.pit_status ?? '')]);
+    const csv = rows.map(row => row.map(v => v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `subaccounts-export-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyForSheets = async () => {
+    const data = await (api as any).exportSubAccountData() as Array<Record<string, unknown>>;
+    const rows = [['Location ID', 'Name', 'PIT', 'Status']];
+    for (const r of data) rows.push([String(r.ghl_location_id ?? ''), String(r.name ?? ''), String(r.pit_token ?? ''), String(r.pit_status ?? '')]);
+    const tsv = rows.map(row => row.join('\t')).join('\n');
+    navigator.clipboard.writeText(tsv);
+    setSheetsCopied(true);
+    setTimeout(() => setSheetsCopied(false), 2000);
+  };
 
   return (
     <div className="p-6">
@@ -187,6 +210,17 @@ export default function SubAccountsPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handleCopyForSheets}
+            title={sheetsCopied ? 'Copied!' : 'Copy for Google Sheets'}
+            className="flex items-center gap-1.5 rounded border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+            {sheetsCopied ? <Check size={13} className="text-green-600" /> : <Table2 size={13} />}
+            {sheetsCopied ? 'Copied!' : 'Sheets'}
+          </button>
+          <button onClick={handleExportCsv}
+            title="Download CSV with location IDs, names, PITs, and status"
+            className="flex items-center gap-1.5 rounded border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+            <Download size={13} /> CSV
+          </button>
           <button
             onClick={() => setShowAddCompany(true)}
             className="flex items-center gap-1.5 rounded border border-teal-600 px-3 py-1.5 text-xs font-medium text-teal-600 dark:text-teal-400 dark:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/30"

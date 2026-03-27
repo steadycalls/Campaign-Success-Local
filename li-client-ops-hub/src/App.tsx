@@ -19,7 +19,9 @@ import RagPage from './pages/RagPage';
 import ReportsPage from './pages/ReportsPage';
 import ReportDrillPage from './pages/ReportDrillPage';
 import NotificationsPage from './pages/settings/NotificationsPage';
+import GoogleAuthPage from './pages/settings/GoogleAuthPage';
 import A2PPage from './pages/A2PPage';
+import GmailPage from './pages/GmailPage';
 import NotificationToastContainer from './components/shared/NotificationToast';
 import { useTheme } from './hooks/useTheme';
 
@@ -49,9 +51,11 @@ export default function App() {
               <Route path="/settings/calendar" element={<CalendarPage />} />
               <Route path="/settings/gdrive" element={<GDrivePage />} />
               <Route path="/kinsta" element={<KinstaPage />} />
+              <Route path="/gmail" element={<GmailPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/reports/drill/:reportId/:metric" element={<ReportDrillPage />} />
               <Route path="/settings/notifications" element={<NotificationsPage />} />
+              <Route path="/settings/google" element={<GoogleAuthPage />} />
               <Route path="/rag" element={<RagPage />} />
             </Routes>
           </main>

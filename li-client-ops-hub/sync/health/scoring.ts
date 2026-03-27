@@ -34,27 +34,27 @@ export function scoreSLA(company: QueryResult): HealthComponent {
   if (daysSince === null || daysSince === undefined) {
     score = 0;
     status = 'red';
-    detail = 'No outbound contact recorded';
+    detail = 'No contact recorded (message, meeting, or call)';
   } else if (daysSince <= 3) {
     score = 100;
     status = 'green';
-    detail = `Contacted ${daysSince}d ago — excellent`;
+    detail = `Last contact ${daysSince}d ago — excellent`;
   } else if (daysSince <= 5) {
     score = 80;
     status = 'green';
-    detail = `Contacted ${daysSince}d ago — on track`;
+    detail = `Last contact ${daysSince}d ago — on track`;
   } else if (daysSince <= 7) {
     score = 50;
     status = 'yellow';
-    detail = `Contacted ${daysSince}d ago — approaching deadline`;
+    detail = `Last contact ${daysSince}d ago — approaching deadline`;
   } else if (daysSince <= 14) {
     score = 20;
     status = 'red';
-    detail = `Contacted ${daysSince}d ago — overdue`;
+    detail = `Last contact ${daysSince}d ago — overdue`;
   } else {
     score = 0;
     status = 'red';
-    detail = `Contacted ${daysSince}d ago — critically overdue`;
+    detail = `Last contact ${daysSince}d ago — critically overdue`;
   }
 
   return { name: 'Communication SLA', weight: 0.25, score, status, detail };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Loader2, Search, X, ChevronDown, ChevronRight, BellOff } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Loader2, Search, X, ChevronDown, ChevronRight, BellOff, Download, Table2, Check, ExternalLink } from 'lucide-react';
 import { api } from '../lib/ipc';
 import { useAlerts } from '../hooks/useDB';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
@@ -178,8 +178,239 @@ function SyncDetail({ companyId, latestRun }: { companyId: string; latestRun: Re
 
 // ── Main Page ─────────────────────────────────────────────────────────
 
+// ── Custom Fields Tab ────────────────────────────────────────────────
+
+function CustomFieldsTab() {
+  const [fields, setFields] = useState<Array<Record<string, unknown>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  useEffect(() => {
+    (api as any).getRICustomFields().then((d: unknown) => { setFields(d as Array<Record<string, unknown>>); setLoading(false); });
+  }, []);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of fields) {
+      const t = (f.data_type as string) || 'unknown';
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [fields]);
+
+  const filtered = useMemo(() => {
+    let list = fields;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(f => (f.name as string || '').toLowerCase().includes(q) || (f.field_key as string || '').toLowerCase().includes(q));
+    }
+    if (typeFilter) list = list.filter(f => f.data_type === typeFilter);
+    return list;
+  }, [fields, search, typeFilter]);
+
+  const handleExportCsv = () => {
+    const rows = [['Name', 'Field Key', 'Type', 'ID']];
+    for (const f of filtered) rows.push([String(f.name ?? ''), String(f.field_key ?? ''), String(f.data_type ?? ''), String(f.id ?? '')]);
+    const csv = rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ri-custom-fields.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+
+  if (loading) return <div className="p-6 text-sm text-slate-400 dark:text-slate-500">Loading...</div>;
+
+  const typeColors: Record<string, string> = {
+    text: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    'large text': 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+    'single options': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+    date: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+    'multiple options': 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+    radio: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+    'file upload': 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
+    checkbox: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+    numerical: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+    phone: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+    signature: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  };
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">GHL Custom Fields</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 dark:text-slate-500">{filtered.length} fields</span>
+          <button onClick={handleExportCsv} className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+            <Download size={12} /> Export
+          </button>
+        </div>
+      </div>
+
+      {/* Type filter pills */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {typeCounts.map(([type, count]) => (
+          <button key={type} onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-opacity ${typeColors[type] || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'} ${typeFilter && typeFilter !== type ? 'opacity-40' : ''}`}>
+            {type} <span className="text-[10px] opacity-70">{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md mb-3">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <input type="text" placeholder="Filter by name, key, or type..." value={search} onChange={e => setSearch(e.target.value)}
+          className="w-full rounded border border-slate-200 dark:border-slate-700 py-1.5 pl-8 pr-8 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none" />
+        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X size={14} /></button>}
+      </div>
+
+      {/* Table */}
+      <div className="overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 w-[30%]">Name</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 w-[35%]">Field Key</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 w-[15%]">Type</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 w-[20%] text-right">ID</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            {filtered.map((f, i) => (
+              <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">{String(f.name)}</td>
+                <td className="px-3 py-2.5 text-xs font-mono text-slate-500 dark:text-slate-400">{String(f.field_key ?? '')}</td>
+                <td className="px-3 py-2.5">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium border ${typeColors[f.data_type as string] || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                    {String(f.data_type ?? '')}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 text-xs font-mono text-slate-400 dark:text-slate-500 text-right">{String(f.id ?? '')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Client Messages Tab ──────────────────────────────────────────────
+
+function ClientMessagesTab() {
+  const [stats, setStats] = useState<Array<Record<string, unknown>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    (api as any).getRIClientMessageStats().then((d: unknown) => { setStats(d as Array<Record<string, unknown>>); setLoading(false); });
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search) return stats;
+    const q = search.toLowerCase();
+    return stats.filter(s => {
+      const name = [s.first_name, s.last_name].filter(Boolean).join(' ').toLowerCase();
+      return name.includes(q) || (s.email as string || '').toLowerCase().includes(q);
+    });
+  }, [stats, search]);
+
+  if (loading) return <div className="p-6 text-sm text-slate-400 dark:text-slate-500">Loading...</div>;
+
+  const totalMsgs = stats.reduce((sum, s) => sum + ((s.total_messages as number) || 0), 0);
+  const withMessages = stats.filter(s => (s.total_messages as number) > 0).length;
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Client Messages</span>
+          <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+            {withMessages}/{stats.length} clients with messages &middot; {totalMsgs.toLocaleString()} total
+          </span>
+        </div>
+      </div>
+
+      <div className="relative max-w-md mb-3">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <input type="text" placeholder="Search contacts..." value={search} onChange={e => setSearch(e.target.value)}
+          className="w-full rounded border border-slate-200 dark:border-slate-700 py-1.5 pl-8 pr-8 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:outline-none" />
+        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X size={14} /></button>}
+      </div>
+
+      <div className="overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Contact</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Email</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 text-center">Total</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 text-center">In</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 text-center">Out</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Last Message</th>
+              <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Type</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            {filtered.map((s, i) => {
+              const name = [s.first_name, s.last_name].filter(Boolean).join(' ') || 'Unknown';
+              const total = (s.total_messages as number) || 0;
+              const lastAt = s.last_message_at as string | null;
+              const lastFormatted = lastAt ? new Date(lastAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+              const lastTime = lastAt ? new Date(lastAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) + ' PST' : null;
+              const ghlUrl = s.ghl_contact_id && s.ghl_location_id
+                ? `https://app.gohighlevel.com/v2/location/${s.ghl_location_id}/contacts/detail/${s.ghl_contact_id}` : null;
+
+              return (
+                <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-slate-900 dark:text-slate-100">{name}</span>
+                      {ghlUrl && (
+                        <button onClick={() => (api as any).openInChrome(ghlUrl)} className="text-teal-500 hover:text-teal-700" title="Open in GHL">
+                          <ExternalLink size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px]">{(s.email as string) || '\u2014'}</td>
+                  <td className={`px-3 py-2.5 text-xs text-center font-medium ${total === 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                    {total.toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-center text-slate-500 dark:text-slate-400">{((s.inbound_count as number) || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2.5 text-xs text-center text-slate-500 dark:text-slate-400">{((s.outbound_count as number) || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
+                    {lastFormatted ? (
+                      <div>
+                        <div>{lastFormatted}</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500">{lastTime}</div>
+                      </div>
+                    ) : <span className="text-red-500 dark:text-red-400">never</span>}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {s.last_message_type ? (
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium border ${
+                        s.last_message_direction === 'outbound'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                          : 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+                      }`}>
+                        {s.last_message_direction === 'outbound' ? '\u2191' : '\u2193'} {String(s.last_message_type)}
+                      </span>
+                    ) : <span className="text-slate-300 dark:text-slate-600">\u2014</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function SyncLogsPage() {
-  const [tab, setTab] = useState<'summary' | 'alerts'>('summary');
+  const [tab, setTab] = useState<'summary' | 'alerts' | 'custom_fields' | 'client_messages'>('summary');
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -212,6 +443,12 @@ export default function SyncLogsPage() {
         </button>
         <button onClick={() => setTab('alerts')} className={`border-b-2 px-4 py-2.5 text-sm font-medium ${tab === 'alerts' ? 'border-teal-500 text-teal-700 dark:text-teal-400' : 'border-transparent text-slate-500 dark:text-slate-400'}`}>
           Alerts ({alerts.filter((a) => !a.acknowledged).length})
+        </button>
+        <button onClick={() => setTab('custom_fields')} className={`border-b-2 px-4 py-2.5 text-sm font-medium ${tab === 'custom_fields' ? 'border-teal-500 text-teal-700 dark:text-teal-400' : 'border-transparent text-slate-500 dark:text-slate-400'}`}>
+          Custom Fields
+        </button>
+        <button onClick={() => setTab('client_messages')} className={`border-b-2 px-4 py-2.5 text-sm font-medium ${tab === 'client_messages' ? 'border-teal-500 text-teal-700 dark:text-teal-400' : 'border-transparent text-slate-500 dark:text-slate-400'}`}>
+          Client Messages
         </button>
       </div>
 
@@ -301,6 +538,9 @@ export default function SyncLogsPage() {
             </div>
           )
         )}
+
+        {tab === 'custom_fields' && <CustomFieldsTab />}
+        {tab === 'client_messages' && <ClientMessagesTab />}
       </div>
     </div>
   );

@@ -1074,8 +1074,9 @@ describe('Auth token usage', () => {
 
   it('re-fetches token on rate limit retry', async () => {
     mockGetValidReadAiToken
-      .mockResolvedValueOnce('token-1')
-      .mockResolvedValueOnce('token-2-fresh');
+      .mockResolvedValueOnce('token-precheck')  // pre-check in syncMeetingsList
+      .mockResolvedValueOnce('token-1')          // readaiFetch first call
+      .mockResolvedValueOnce('token-2-fresh');   // readaiFetch retry after 429
 
     mockFetch
       .mockResolvedValueOnce(makeRateLimitResponse('1'))
@@ -1083,8 +1084,8 @@ describe('Auth token usage', () => {
 
     await syncMeetingsList(1);
 
-    // Second fetch should use fresh token
-    expect(mockGetValidReadAiToken).toHaveBeenCalledTimes(2);
+    // 3 calls: pre-check + first fetch + retry
+    expect(mockGetValidReadAiToken).toHaveBeenCalledTimes(3);
     const retryInit = mockFetch.mock.calls[1][1] as RequestInit;
     expect((retryInit.headers as Record<string, string>).Authorization).toBe('Bearer token-2-fresh');
   });

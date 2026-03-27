@@ -29,8 +29,7 @@ export async function authorizeGoogleDrive(
   clientId: string,
   clientSecret: string
 ): Promise<GoogleTokens> {
-  // Dynamic import — 'open' is ESM-only in v10+
-  const open = (await import('open')).default;
+  const { shell } = require('electron') as typeof import('electron');
 
   return new Promise((resolve, reject) => {
     const server = http.createServer();
@@ -119,7 +118,7 @@ export async function authorizeGoogleDrive(
       });
 
       // Open browser
-      open(authUrl.toString());
+      shell.openExternal(authUrl.toString());
 
       // Timeout after 5 minutes
       setTimeout(() => {

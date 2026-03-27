@@ -41,11 +41,17 @@ export function startScheduler() {
     const readaiAuth = queryOne('SELECT id FROM readai_auth WHERE id = ?', ['default']);
     if (!readaiAuth) return;
 
+    // Check how many need expanding
+    const pending = queryOne('SELECT COUNT(*) as cnt FROM meetings WHERE expanded = 0');
+    const pendingCount = (pending?.cnt as number) || 0;
+
+    if (pendingCount === 0) return; // nothing to expand
+
+    logger.scheduler('Read.ai expand starting', { pending: pendingCount });
+
     try {
-      const counts = await expandMeetingDetails(10);
-      if (counts.updated > 0) {
-        logger.scheduler('Read.ai expanded meetings', { expanded: counts.updated });
-      }
+      const counts = await expandMeetingDetails(20); // 20 per run instead of 10
+      logger.scheduler('Read.ai expand complete', { expanded: counts.updated, attempted: counts.found, remaining: Math.max(0, pendingCount - counts.found) });
     } catch (err: unknown) {
       logger.error('Scheduler', 'Read.ai expand failed', { error: err instanceof Error ? err.message : String(err) });
     }
@@ -184,21 +190,36 @@ export function startScheduler() {
   });
 
   // Read.ai: sync recent meetings every 2 hours during business hours on weekdays
-  readaiDailyTask = cron.schedule('20 6,8,10,12,14,16,18,20 * * 1-5', async () => {
+  readaiDailyTask = cron.schedule('20 6,8,10,12,14,16,18,20 * * *', async () => {
     const readaiAuth = queryOne('SELECT id FROM readai_auth WHERE id = ?', ['default']);
     if (!readaiAuth) return;
 
+    logger.scheduler('Read.ai daily sync starting');
+
     try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
+      // Pass 1: fetch recent meetings (last 2 days)
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
       const result = await syncReadAiMeetingsRange({
-        sinceDate: yesterday.toISOString(),
-        maxPages: 5,
+        sinceDate: twoDaysAgo.toISOString(),
+        maxPages: 10,
       });
 
+      logger.scheduler('Read.ai Pass 1 complete', { fetched: result.fetched, created: result.created });
+
+      // Pass 2: expand unexpanded meetings (summaries + transcripts)
       if (result.fetched > 0) {
-        logger.scheduler('Read.ai daily sync', { fetched: result.fetched, created: result.created });
+        let expanded = 0;
+        let batch;
+        do {
+          batch = await expandMeetingDetails(20);
+          expanded += batch.updated;
+        } while (batch.found > 0);
+
+        if (expanded > 0) {
+          logger.scheduler('Read.ai Pass 2 complete', { expanded });
+        }
       }
     } catch (err: unknown) {
       logger.error('Scheduler', 'Read.ai daily sync failed', { error: err instanceof Error ? err.message : String(err) });

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
-import { Search, X, Check, XIcon, RefreshCw, Loader2, ChevronDown, Settings2, ExternalLink, MessageSquare } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { Search, X, Check, XIcon, RefreshCw, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Settings2, ExternalLink, MessageSquare } from 'lucide-react';
 import { api } from '../lib/ipc';
 import SLABadge from '../components/shared/SLABadge';
 import HealthBadge from '../components/shared/HealthBadge';
@@ -16,6 +16,9 @@ interface ContactsSyncProgress {
   companyName: string;
   totalFound: number;
   totalCreated: number;
+  totalMessages: number;
+  contactIndex: number;
+  contactTotal: number;
   percent: number;
 }
 
@@ -76,32 +79,65 @@ function AssocCell({ client, type, onRefresh }: {
     onRefresh();
   };
 
-  // Smart suggest: sort by fuzzy match to client's company name
-  const clientCompanyName = client.ghl_company_name || client.company_name || '';
+  const handleUnlink = async () => {
+    if (!assoc) return;
+    // Get the actual association ID from the server
+    const assocs = await api.getAssociationsForClient(client.id);
+    const match = assocs.find((a: any) => a.association_type === type && a.target_id === assoc.targetId);
+    if (match) {
+      await api.removeAssociation((match as any).id);
+      onRefresh();
+    }
+  };
+
+  const handleCancel = () => {
+    setPicking(false);
+    setSearch('');
+  };
+
+  // Smart suggest: sort by fuzzy match, exclude "Restoration Inbound"
+  const rawCompany = (client.ghl_company_name || client.company_name || '') as string;
+  const clientCompanyName = rawCompany.toLowerCase() === 'restoration inbound' ? '' : rawCompany;
   const sorted = useMemo(() => {
-    let list = options.filter(o => o.name.toLowerCase().includes(search.toLowerCase()));
+    let list = options
+      .filter(o => o.name.toLowerCase().includes(search.toLowerCase()))
+      .filter(o => o.name.toLowerCase() !== 'restoration inbound');
     if (clientCompanyName && !search && (type === 'sub_account' || type === 'discord_channel')) {
       list = [...list].sort((a, b) => fuzzyMatch(b.name, clientCompanyName) - fuzzyMatch(a.name, clientCompanyName));
     }
     return list;
   }, [options, search, clientCompanyName, type]);
 
-  const topSuggestion = !assoc && !search && clientCompanyName && sorted.length > 0 && fuzzyMatch(sorted[0].name, clientCompanyName) > 0.3
-    ? sorted[0] : null;
+  // Top 3 suggestions (excluding RI)
+  const topSuggestions = !assoc && !search && clientCompanyName
+    ? sorted.filter(o => fuzzyMatch(o.name, clientCompanyName) > 0.3).slice(0, 3)
+    : [];
 
   return (
-    <td className="px-3 py-2 relative">
+    <td className="px-3 py-2 relative group">
       {assoc ? (
-        <button onClick={() => { setPicking(!picking); if (!picking) loadOptions(); }}
-          className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400" title={assoc.targetName}>
-          <Check size={12} className="text-green-500 dark:text-green-400" />
-          <span className="truncate max-w-[120px]">{assoc.targetName}</span>
-        </button>
-      ) : topSuggestion && !picking ? (
-        <button onClick={() => handlePick(topSuggestion.id, topSuggestion.name)}
-          className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 italic" title={`Suggest: ${topSuggestion.name}`}>
-          <span className="truncate max-w-[120px]">{topSuggestion.name}?</span>
-        </button>
+        <div className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+          <button onClick={() => { setPicking(!picking); if (!picking) loadOptions(); }}
+            className="flex items-center gap-1" title={assoc.targetName}>
+            <Check size={12} className="text-green-500 dark:text-green-400" />
+            <span className="truncate max-w-[120px]">{assoc.targetName}</span>
+          </button>
+          <button onClick={handleUnlink}
+            className="opacity-0 group-hover:opacity-100 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-opacity"
+            title="Unlink">
+            <XIcon size={11} />
+          </button>
+        </div>
+      ) : topSuggestions.length > 0 && !picking ? (
+        <div className="space-y-0.5">
+          {topSuggestions.map((s, i) => (
+            <button key={s.id} onClick={() => handlePick(s.id, s.name)}
+              className={`flex items-center gap-1 text-xs italic truncate max-w-[140px] ${i === 0 ? 'text-amber-600 hover:text-amber-800' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-[10px]'}`}
+              title={`Link to ${s.name}`}>
+              {s.name}{i === 0 ? '?' : ''}
+            </button>
+          ))}
+        </div>
       ) : (
         <button onClick={() => { setPicking(!picking); if (!picking) loadOptions(); }}
           className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
@@ -109,7 +145,7 @@ function AssocCell({ client, type, onRefresh }: {
         </button>
       )}
       {picking && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg" onClick={e => e.stopPropagation()}>
           <div className="p-2">
             <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
               className="w-full rounded border border-slate-200 dark:border-slate-600 px-2 py-1 text-xs focus:border-teal-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200" autoFocus />
@@ -126,8 +162,130 @@ function AssocCell({ client, type, onRefresh }: {
             )}
           </div>
           <div className="border-t border-slate-100 dark:border-slate-700/50 p-1">
-            <button onClick={() => setPicking(false)} className="w-full px-2 py-1 text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">Cancel</button>
+            <button onClick={handleCancel} className="w-full px-2 py-1 text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">Cancel</button>
           </div>
+        </div>
+      )}
+    </td>
+  );
+}
+
+// ── Read.ai meeting hover cell ───────────────────────────────────────
+
+interface MeetingSummary {
+  id: string;
+  title: string | null;
+  meeting_date: string;
+  start_time_ms: number | null;
+  report_url: string | null;
+  readai_meeting_id: string | null;
+  participants_count: number;
+}
+
+function ReadaiMeetingHoverCell({ client, readaiEmails, meetingCount, onEditClick }: {
+  client: ClientWithAssociations;
+  readaiEmails: Array<{ email: string }>;
+  meetingCount: number;
+  onEditClick: () => void;
+}) {
+  const [showPopover, setShowPopover] = useState(false);
+  const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const ref = useRef<HTMLTableCellElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadMeetings = async () => {
+    if (loaded) return;
+    const emails = readaiEmails.map(e => e.email);
+    if (emails.length === 0) { setLoaded(true); return; }
+    try {
+      const data = await api.getMeetingsForEmails(emails, 5);
+      setMeetings(data ?? []);
+    } catch {
+      setMeetings([]);
+    }
+    setLoaded(true);
+  };
+
+  const handleMouseEnter = () => {
+    if (meetingCount === 0) return;
+    hoverTimer.current = setTimeout(() => {
+      setShowPopover(true);
+      loadMeetings();
+    }, 300);
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    // Don't close if moving into the popover
+    const related = e.relatedTarget as Node | null;
+    if (ref.current && related && ref.current.contains(related)) return;
+    setShowPopover(false);
+  };
+
+  const handlePopoverLeave = (e: React.MouseEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (ref.current && related && ref.current.contains(related)) return;
+    setShowPopover(false);
+  };
+
+  const fmtDate = (ms: number | null, date: string) => {
+    if (ms) return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  return (
+    <td className="px-3 py-2 relative" ref={ref}>
+      <div
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <button onClick={onEditClick} className="text-left group">
+          <div className="flex items-center gap-1">
+            <Check size={12} className="text-green-500 dark:text-green-400" />
+            <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400">
+              {meetingCount > 0 ? `${meetingCount} mtg${meetingCount !== 1 ? 's' : ''}` : `${readaiEmails.length} email${readaiEmails.length !== 1 ? 's' : ''}`}
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {showPopover && meetingCount > 0 && (
+        <div
+          onMouseLeave={handlePopoverLeave}
+          className="absolute left-0 top-full z-50 mt-1 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Recent Meetings</span>
+            <button onClick={onEditClick} className="text-[10px] text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300">Edit emails</button>
+          </div>
+          {meetings.length === 0 && loaded ? (
+            <div className="px-3 py-4 text-xs text-slate-400 dark:text-slate-500 text-center">No meetings found</div>
+          ) : meetings.length === 0 ? (
+            <div className="px-3 py-4 text-xs text-slate-400 dark:text-slate-500 text-center">Loading...</div>
+          ) : (
+            <div className="max-h-48 overflow-y-auto">
+              {meetings.map((m) => (
+                <div key={m.id} className="px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-b border-slate-50 dark:border-slate-700/30 last:border-b-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate flex-1">{m.title || 'Untitled'}</span>
+                    {m.report_url && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); api.openInChrome(m.report_url!); }}
+                        className="shrink-0 text-[10px] text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 flex items-center gap-0.5 hover:underline"
+                      >
+                        Read.ai <ExternalLink size={9} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {fmtDate(m.start_time_ms, m.meeting_date)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </td>
@@ -176,25 +334,51 @@ function ReadaiEmailCell({ client, onRefresh }: { client: ClientWithAssociations
 
   if (readaiEmails.length > 0 && !editing) {
     return (
-      <td className="px-3 py-2">
-        <button onClick={openPicker} className="text-left group">
-          <div className="flex items-center gap-1">
-            <Check size={12} className="text-green-500 dark:text-green-400" />
-            <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400">
-              {meetingCount > 0 ? `${meetingCount} mtg${meetingCount !== 1 ? 's' : ''}` : `${readaiEmails.length} email${readaiEmails.length !== 1 ? 's' : ''}`}
-            </span>
-          </div>
-        </button>
-      </td>
+      <ReadaiMeetingHoverCell
+        client={client}
+        readaiEmails={readaiEmails}
+        meetingCount={meetingCount}
+        onEditClick={openPicker}
+      />
     );
   }
 
   if (!editing) {
+    // Auto-add: if client has email, one-click to save it
+    if (client.email) {
+      const handleAutoAdd = async () => {
+        setSaving(true);
+        try {
+          await api.setReadaiEmails({ clientContactId: client.id, ghlContactId: client.ghl_contact_id ?? '', emails: [client.email!] });
+          onRefresh();
+        } finally { setSaving(false); }
+      };
+      return (
+        <td className="px-3 py-2">
+          <button onClick={handleAutoAdd} disabled={saving}
+            className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 italic"
+            title={`Auto-link ${client.email} to Read.ai meetings`}>
+            {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+            <span className="truncate max-w-[100px]">{client.email}</span>
+          </button>
+        </td>
+      );
+    }
+
+    // No email — show red warning with GHL link
+    const ghlUrl = client.ghl_contact_id && client.ghl_location_id
+      ? `https://app.gohighlevel.com/v2/location/${client.ghl_location_id}/contacts/detail/${client.ghl_contact_id}` : null;
     return (
       <td className="px-3 py-2">
-        <button onClick={openPicker} className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
-          <XIcon size={12} /> none
-        </button>
+        {ghlUrl ? (
+          <button onClick={() => api.openInChrome(ghlUrl)}
+            className="text-[11px] text-red-500 dark:text-red-400 hover:text-red-700 hover:underline"
+            title="Go to call notes to find email address">
+            no contact email
+          </button>
+        ) : (
+          <span className="text-[11px] text-red-500 dark:text-red-400">no email</span>
+        )}
       </td>
     );
   }
@@ -240,6 +424,7 @@ const ALL_COLUMNS: ColDef[] = [
   { key: 'msgs_30d', label: 'Msgs 30d', defaultVisible: true },
   { key: 'messages', label: 'Total Msgs', defaultVisible: false },
   { key: 'email', label: 'Email', defaultVisible: false },
+  { key: 'domain', label: 'Domain', defaultVisible: false },
   { key: 'phone', label: 'Phone', defaultVisible: false },
   { key: 'company', label: 'Company/Business', defaultVisible: false },
 ];
@@ -314,6 +499,25 @@ function SyncDropdown({ onSyncAll, onSyncMessages, syncing }: {
   );
 }
 
+// ── Sortable column header ────────────────────────────────────────────
+
+function SortTh({ label, k, current, dir, onSort, px }: {
+  label: string; k: string; current: string; dir: 'asc' | 'desc'; onSort: (k: string) => void; px?: string;
+}) {
+  const active = k === current;
+  return (
+    <th className={`${px ?? 'px-3'} py-2`}>
+      <button onClick={() => onSort(k)}
+        className="group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">
+        {label}
+        <span className={active ? 'text-teal-600 dark:text-teal-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400'}>
+          {active ? (dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronsUpDown size={12} />}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────
 
 export default function ClientsPage() {
@@ -325,6 +529,13 @@ export default function ClientsPage() {
   const [syncProgress, setSyncProgress] = useState<ContactsSyncProgress | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(DEFAULT_VISIBLE);
+  const [sortKey, setSortKey] = useState<string>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (key: string) => {
+    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
 
   const load = async () => {
     const [data, ranking] = await Promise.all([
@@ -382,6 +593,68 @@ export default function ClientsPage() {
     });
   }, [clients, search]);
 
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'name':
+          cmp = formatContactName(a.first_name, a.last_name, '').localeCompare(formatContactName(b.first_name, b.last_name, ''));
+          break;
+        case 'days':
+          cmp = ((a.days_since_outbound as number) ?? 9999) - ((b.days_since_outbound as number) ?? 9999);
+          break;
+        case 'sla': {
+          const order: Record<string, number> = { violation: 0, warning: 1, ok: 2 };
+          cmp = (order[a.sla_status] ?? 2) - (order[b.sla_status] ?? 2);
+          break;
+        }
+        case 'msgs_7d':
+          cmp = ((a as any).msgs_7d ?? 0) - ((b as any).msgs_7d ?? 0);
+          break;
+        case 'msgs_30d':
+          cmp = ((a as any).msgs_30d ?? 0) - ((b as any).msgs_30d ?? 0);
+          break;
+        case 'messages':
+          cmp = ((a as any).message_count ?? 0) - ((b as any).message_count ?? 0);
+          break;
+        case 'email':
+          cmp = (a.email ?? '').localeCompare(b.email ?? '');
+          break;
+        case 'domain':
+          cmp = ((a as any).website ?? '').localeCompare((b as any).website ?? '');
+          break;
+        case 'phone':
+          cmp = (a.phone ?? '').localeCompare(b.phone ?? '');
+          break;
+        case 'company':
+          cmp = ((a as any).ghl_company_name ?? '').localeCompare((b as any).ghl_company_name ?? '');
+          break;
+        case 'sub_account': {
+          const aName = a.associations?.sub_account?.targetName ?? '';
+          const bName = b.associations?.sub_account?.targetName ?? '';
+          cmp = aName.localeCompare(bName);
+          break;
+        }
+        case 'discord': {
+          const aName = a.associations?.discord_channel?.targetName ?? '';
+          const bName = b.associations?.discord_channel?.targetName ?? '';
+          cmp = aName.localeCompare(bName);
+          break;
+        }
+        case 'readai':
+          cmp = ((a as any).readai_meeting_count ?? 0) - ((b as any).readai_meeting_count ?? 0);
+          break;
+        case 'health': {
+          const aH = a.associations?.sub_account ? (healthMap[a.associations.sub_account.targetId]?.health_score ?? -1) : -1;
+          const bH = b.associations?.sub_account ? (healthMap[b.associations.sub_account.targetId]?.health_score ?? -1) : -1;
+          cmp = aH - bH;
+          break;
+        }
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+  }, [filtered, sortKey, sortDir, healthMap]);
+
   const show = (key: string) => visibleCols.has(key);
 
   if (loading) return <div className="p-6 text-sm text-slate-400 dark:text-slate-500">Loading clients...</div>;
@@ -400,19 +673,54 @@ export default function ClientsPage() {
 
         {syncing && syncProgress && syncProgress.phase !== 'complete' && (
           <div className="mt-2 rounded bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 px-3 py-2">
-            <div className="flex items-center justify-between text-xs text-teal-700 dark:text-teal-400 mb-1">
-              <span>
-                {syncProgress.phase === 'messages' ? 'Syncing messages' : 'Syncing contacts'}: {syncProgress.companyName}
-                <span className="text-teal-500 dark:text-teal-400 ml-1">({syncProgress.companyIndex + 1}/{syncProgress.companyTotal})</span>
-              </span>
-              <span className="font-medium">{syncProgress.percent}%</span>
+            {/* Phase label */}
+            <div className="flex items-center justify-between text-xs mb-1">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                  syncProgress.phase === 'contacts' ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-400' : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400'
+                }`}>
+                  {syncProgress.phase === 'contacts' ? 'Contacts' : 'Messages'}
+                </span>
+                <span className="text-slate-600 dark:text-slate-400 font-medium">{syncProgress.companyName}</span>
+              </div>
+              <span className="font-medium text-teal-700 dark:text-teal-400">{syncProgress.percent}%</span>
             </div>
+
+            {/* Progress bar */}
             <div className="h-1.5 bg-teal-100 dark:bg-teal-900/30 rounded-full overflow-hidden">
-              <div className="h-full bg-teal-500 rounded-full transition-all duration-300" style={{ width: `${syncProgress.percent}%` }} />
+              <div className={`h-full rounded-full transition-all duration-300 ${syncProgress.phase === 'contacts' ? 'bg-teal-500' : 'bg-indigo-500'}`}
+                style={{ width: `${syncProgress.percent}%` }} />
             </div>
-            <div className="text-[11px] text-teal-600 dark:text-teal-400 mt-1">
-              {syncProgress.totalFound} processed
-              {syncProgress.totalCreated > 0 && <> ({syncProgress.totalCreated} new)</>}
+
+            {/* Stats */}
+            <div className="flex items-center gap-3 mt-1.5 text-[11px]">
+              {syncProgress.phase === 'contacts' ? (
+                <>
+                  <span className="text-teal-600 dark:text-teal-400">
+                    {syncProgress.companyIndex + 1}/{syncProgress.companyTotal} companies
+                  </span>
+                  <span className="text-slate-400 dark:text-slate-500">&middot;</span>
+                  <span className="text-teal-600 dark:text-teal-400">
+                    {syncProgress.totalFound.toLocaleString()} contacts found
+                  </span>
+                  {syncProgress.totalCreated > 0 && (
+                    <>
+                      <span className="text-slate-400 dark:text-slate-500">&middot;</span>
+                      <span className="text-green-600 dark:text-green-400">{syncProgress.totalCreated} new</span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="text-indigo-600 dark:text-indigo-400">
+                    {syncProgress.contactIndex}/{syncProgress.contactTotal} contacts
+                  </span>
+                  <span className="text-slate-400 dark:text-slate-500">&middot;</span>
+                  <span className="text-indigo-600 dark:text-indigo-400">
+                    {(syncProgress.totalMessages || 0).toLocaleString()} messages synced
+                  </span>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -444,24 +752,25 @@ export default function ClientsPage() {
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
               <tr>
-                {show('name') && <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Name</th>}
-                {show('days') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Days</th>}
-                {show('sla') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">SLA</th>}
-                {show('sub_account') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Sub-Account</th>}
-                {show('discord') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Discord</th>}
-                {show('readai') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Read.ai</th>}
-                {show('teamwork') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Teamwork</th>}
-                {show('health') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Health</th>}
-                {show('msgs_7d') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">7d</th>}
-                {show('msgs_30d') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">30d</th>}
-                {show('messages') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Total</th>}
-                {show('email') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Email</th>}
-                {show('phone') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Phone</th>}
-                {show('company') && <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Company</th>}
+                {show('name') && <SortTh label="Name" k="name" current={sortKey} dir={sortDir} onSort={handleSort} px="px-4" />}
+                {show('days') && <SortTh label="Days" k="days" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('sla') && <SortTh label="SLA" k="sla" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('sub_account') && <SortTh label="Sub-Account" k="sub_account" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('discord') && <SortTh label="Discord" k="discord" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('readai') && <SortTh label="Read.ai" k="readai" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('teamwork') && <SortTh label="Teamwork" k="teamwork" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('health') && <SortTh label="Health" k="health" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('msgs_7d') && <SortTh label="7d" k="msgs_7d" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('msgs_30d') && <SortTh label="30d" k="msgs_30d" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('messages') && <SortTh label="Total" k="messages" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('email') && <SortTh label="Email" k="email" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('domain') && <SortTh label="Domain" k="domain" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('phone') && <SortTh label="Phone" k="phone" current={sortKey} dir={sortDir} onSort={handleSort} />}
+                {show('company') && <SortTh label="Company" k="company" current={sortKey} dir={sortDir} onSort={handleSort} />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-              {filtered.map(c => {
+              {sorted.map(c => {
                 const name = formatContactName(c.first_name, c.last_name);
                 const ghlContactUrl = c.ghl_contact_id && c.ghl_location_id
                   ? `https://app.gohighlevel.com/v2/location/${c.ghl_location_id}/contacts/detail/${c.ghl_contact_id}` : null;
@@ -473,9 +782,12 @@ export default function ClientsPage() {
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-900 dark:text-slate-100">{name}</span>
-                          {(c.ghl_company_name || c.company_name) && (
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]">{String(c.ghl_company_name || c.company_name)}</span>
-                          )}
+                          {(() => {
+                            const co = String(c.ghl_company_name || c.company_name || '');
+                            return co && co.toLowerCase() !== 'restoration inbound' ? (
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]">{co}</span>
+                            ) : null;
+                          })()}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           {c.email && (
@@ -547,16 +859,55 @@ export default function ClientsPage() {
                     )}
 
                     {/* Email */}
-                    {show('email') && (
-                      <td className="px-3 py-2 text-xs">
-                        {c.email ? (
-                          <button onClick={() => api.openInChrome(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(c.email!)}`)}
-                            className="text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:underline truncate max-w-[160px] block" title="Open Gmail compose">
-                            {c.email}
-                          </button>
-                        ) : <span className="text-slate-300 dark:text-slate-600">&mdash;</span>}
-                      </td>
-                    )}
+                    {show('email') && (() => {
+                      const website = (c as unknown as Record<string, unknown>).website as string | null;
+                      const domainHidden = !show('domain');
+                      let domainStr = '';
+                      if (website) {
+                        try { domainStr = new URL(website.startsWith('http') ? website : `https://${website}`).hostname.replace(/^www\./, ''); }
+                        catch { domainStr = website; }
+                      }
+                      return (
+                        <td className="px-3 py-2 text-xs">
+                          {c.email ? (
+                            <div>
+                              <button onClick={() => api.openInChrome(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(c.email!)}`)}
+                                className="text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:underline truncate max-w-[160px] block" title="Open Gmail compose">
+                                {c.email}
+                              </button>
+                              {domainHidden && domainStr && (
+                                <button onClick={() => api.openInChrome(website!.startsWith('http') ? website! : `https://${website}`)}
+                                  className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 hover:underline truncate block"
+                                  title={`Go to ${domainStr}`}>
+                                  {domainStr}
+                                </button>
+                              )}
+                            </div>
+                          ) : <span className="text-slate-300 dark:text-slate-600">&mdash;</span>}
+                        </td>
+                      );
+                    })()}
+
+                    {/* Domain */}
+                    {show('domain') && (() => {
+                      const website = (c as unknown as Record<string, unknown>).website as string | null;
+                      let domainStr = '';
+                      if (website) {
+                        try { domainStr = new URL(website.startsWith('http') ? website : `https://${website}`).hostname.replace(/^www\./, ''); }
+                        catch { domainStr = website; }
+                      }
+                      return (
+                        <td className="px-3 py-2 text-xs">
+                          {domainStr ? (
+                            <button onClick={() => api.openInChrome(website!.startsWith('http') ? website! : `https://${website}`)}
+                              className="text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 hover:underline truncate max-w-[140px] block"
+                              title={`Go to ${domainStr}`}>
+                              {domainStr}
+                            </button>
+                          ) : <span className="text-slate-300 dark:text-slate-600">&mdash;</span>}
+                        </td>
+                      );
+                    })()}
 
                     {/* Phone */}
                     {show('phone') && (
@@ -573,7 +924,10 @@ export default function ClientsPage() {
                     {/* Company/Business */}
                     {show('company') && (
                       <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400 truncate max-w-[150px]">
-                        {c.ghl_company_name || c.company_name || <span className="text-slate-300 dark:text-slate-600">&mdash;</span>}
+                        {(() => {
+                          const co = String(c.ghl_company_name || c.company_name || '');
+                          return co && co.toLowerCase() !== 'restoration inbound' ? co : <span className="text-slate-300 dark:text-slate-600">&mdash;</span>;
+                        })()}
                       </td>
                     )}
                   </tr>

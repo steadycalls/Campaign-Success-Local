@@ -1,15 +1,32 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { syncGmail, getGmailStats } from '../../sync/adapters/gmail';
 import { randomUUID } from 'crypto';
+
+function sendGmailProgress(data: Record<string, unknown>): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('gmail:syncProgress', data);
+  }
+}
 
 export function registerGmailHandlers(): void {
   // ── Sync Gmail ────────────────────────────────────────────────────
   ipcMain.handle('gmail:sync', async (_e, sinceDays?: number, accountId?: string) => {
     try {
-      const result = await syncGmail(sinceDays ?? 30, accountId ?? 'default');
+      const aid = accountId ?? 'default';
+      const authRow = queryOne('SELECT email FROM google_auth WHERE id = ?', [aid]);
+      const accountEmail = (authRow?.email as string) ?? aid;
+
+      sendGmailProgress({ phase: 'starting', accountEmail, percent: 0, fetched: 0, created: 0 });
+
+      const result = await syncGmail(sinceDays ?? 30, aid, (progress) => {
+        sendGmailProgress({ phase: 'syncing', accountEmail, ...progress });
+      });
+
+      sendGmailProgress({ phase: 'complete', accountEmail, percent: 100, fetched: result.found, created: result.created });
       return { success: true, ...result };
     } catch (err: unknown) {
+      sendGmailProgress({ phase: 'error', error: err instanceof Error ? err.message : String(err) });
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
@@ -60,6 +77,20 @@ export function registerGmailHandlers(): void {
       );
     }
     return { success: true };
+  });
+
+  // ── Get all emails (paginated) ──────────────────────────────────────
+  ipcMain.handle('gmail:getAll', (_e, limit?: number, offset?: number) => {
+    return queryAll(`
+      SELECT gm.id, gm.thread_id, gm.subject, gm.from_email, gm.from_name,
+        gm.to_emails, gm.date, gm.snippet, gm.direction,
+        gm.has_attachments, gm.company_id, gm.match_method,
+        co.name as company_name
+      FROM gmail_messages gm
+      LEFT JOIN companies co ON co.id = gm.company_id
+      ORDER BY gm.date DESC
+      LIMIT ? OFFSET ?
+    `, [limit ?? 200, offset ?? 0]);
   });
 
   // ── Stats ─────────────────────────────────────────────────────────

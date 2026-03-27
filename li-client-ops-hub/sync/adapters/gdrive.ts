@@ -2,15 +2,11 @@ import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { delay } from '../utils/rateLimit';
 import { type SyncCounts, logAlert } from '../utils/logger';
-import { refreshGoogleToken } from './gdrive-auth';
+import { getGoogleToken } from './google-token';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
-
-function getEnvValue(key: string): string {
-  return process.env[key] || '';
-}
 
 class RateLimitError extends Error {
   constructor(message: string) {
@@ -19,56 +15,13 @@ class RateLimitError extends Error {
   }
 }
 
-// ── Token management ─────────────────────────────────────────────────
-
-async function getValidAccessToken(): Promise<string> {
-  const auth = queryOne(
-    'SELECT access_token, refresh_token, expires_at FROM google_auth WHERE id = ?',
-    ['default']
-  );
-
-  if (!auth?.access_token || !auth?.refresh_token) {
-    throw new Error(
-      'Google Drive not authorized. Go to Settings > Integrations to authorize.'
-    );
-  }
-
-  // Refresh if expired or about to expire (5 min buffer)
-  const expiresAt = new Date(auth.expires_at as string).getTime();
-  const now = Date.now();
-
-  if (now >= expiresAt - 300_000) {
-    const clientId = getEnvValue('GOOGLE_CLIENT_ID');
-    const clientSecret = getEnvValue('GOOGLE_CLIENT_SECRET');
-
-    const refreshed = await refreshGoogleToken(
-      clientId,
-      clientSecret,
-      auth.refresh_token as string
-    );
-
-    const newExpiresAt = new Date(
-      now + refreshed.expires_in * 1000
-    ).toISOString();
-
-    execute(
-      `UPDATE google_auth SET access_token = ?, expires_at = ?, updated_at = datetime('now') WHERE id = 'default'`,
-      [refreshed.access_token, newExpiresAt]
-    );
-
-    return refreshed.access_token;
-  }
-
-  return auth.access_token as string;
-}
-
 // ── Drive API fetch ──────────────────────────────────────────────────
 
 async function driveFetch(
   path: string,
-  params?: Record<string, string>
+  params?: Record<string, string>,
 ): Promise<Record<string, unknown>> {
-  const token = await getValidAccessToken();
+  const token = await getGoogleToken('drive');
   const url = new URL(`${DRIVE_API_BASE}${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {

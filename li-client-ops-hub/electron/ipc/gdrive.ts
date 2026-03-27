@@ -10,6 +10,7 @@ import {
   acceptFolderSuggestion,
 } from '../../sync/adapters/gdrive';
 import { logSyncStart, logSyncEnd } from '../../sync/utils/logger';
+import { isServiceAccountMode, getServiceAccountAdminEmail } from '../../sync/adapters/google-service-account';
 
 function getEnvValue(key: string): string {
   return process.env[key] || '';
@@ -44,9 +45,9 @@ export function registerGdriveHandlers(): void {
         [tokens.access_token, tokens.refresh_token, expiresAt, userInfo.email || null, tokens.scope || '']
       );
 
-      // Update integration status
+      // Update integration status for both gdrive and gmail (shared OAuth)
       execute(
-        `UPDATE integrations SET status = 'connected', last_tested_at = datetime('now'), last_error = NULL, updated_at = datetime('now') WHERE name = 'gdrive'`
+        `UPDATE integrations SET status = 'connected', last_tested_at = datetime('now'), last_error = NULL, updated_at = datetime('now') WHERE name IN ('gdrive', 'gmail')`
       );
 
       return { success: true, email: userInfo.email || 'unknown' };
@@ -60,6 +61,12 @@ export function registerGdriveHandlers(): void {
 
   // ── Auth status ────────────────────────────────────────────────────
   ipcMain.handle('gdrive:getAuthStatus', () => {
+    // Service account mode
+    if (isServiceAccountMode()) {
+      const adminEmail = getServiceAccountAdminEmail();
+      return { email: adminEmail || 'service account', authorized_at: new Date().toISOString(), expires_at: null };
+    }
+    // OAuth mode
     const auth = queryOne(
       'SELECT email, authorized_at, expires_at FROM google_auth WHERE id = ?',
       ['default']

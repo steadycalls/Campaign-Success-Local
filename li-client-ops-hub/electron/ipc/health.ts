@@ -51,12 +51,18 @@ export function registerHealthHandlers(): void {
   ipcMain.handle('health:getAtRisk', () => {
     const RI_LOCATION_ID = process.env.RI_LOCATION_ID || 'g6zCuamu3IQlnY1ympGx';
     return queryAll(`
-      SELECT id, name, health_score, health_grade, health_status, health_trend,
-        health_components_json
-      FROM companies
-      WHERE status = 'active' AND health_status IN ('at_risk', 'critical')
-        AND (ghl_location_id IS NULL OR ghl_location_id != ?)
-      ORDER BY health_score ASC
+      SELECT co.id, co.name, co.health_score, co.health_grade, co.health_status, co.health_trend,
+        co.health_components_json,
+        (SELECT c.first_name FROM client_associations ca
+         JOIN contacts c ON c.id = ca.client_contact_id
+         WHERE ca.target_id = co.id AND ca.association_type = 'sub_account' LIMIT 1) as client_first_name,
+        (SELECT c.last_name FROM client_associations ca
+         JOIN contacts c ON c.id = ca.client_contact_id
+         WHERE ca.target_id = co.id AND ca.association_type = 'sub_account' LIMIT 1) as client_last_name
+      FROM companies co
+      WHERE co.status = 'active' AND co.health_status IN ('at_risk', 'critical')
+        AND (co.ghl_location_id IS NULL OR co.ghl_location_id != ?)
+      ORDER BY co.health_score ASC
     `, [RI_LOCATION_ID]);
   });
 

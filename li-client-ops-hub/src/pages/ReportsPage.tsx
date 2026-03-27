@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FileText, RefreshCw, ExternalLink, ChevronDown, Trash2 } from 'lucide-react';
+import { FileText, RefreshCw, ExternalLink, ChevronDown, Trash2, Info } from 'lucide-react';
 import { api } from '../lib/ipc';
 import type { WeeklyReportListItem, WeeklyReportFull } from '../types';
 import ReportDashboard from '../components/reports/ReportDashboard';
@@ -209,7 +209,22 @@ export default function ReportsPage() {
  {/* Header */}
  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-3">
  <div>
+ <div className="flex items-center gap-2">
  <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reports</h1>
+ <div className="relative group">
+ <Info size={15} className="text-slate-400 dark:text-slate-500 cursor-help" />
+ <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl p-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+ <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1.5">Where does meeting data come from?</p>
+ <ul className="space-y-1 list-disc pl-3.5">
+ <li><strong>Read.ai</strong> — Meeting titles, summaries, transcripts, action items, topics, key questions, and engagement metrics (Read Score, Sentiment, Engagement) are synced via the Read.ai API.</li>
+ <li><strong>Participants</strong> — Attendee names and emails come from Read.ai's participant data. Contacts are matched to GHL records by email domain.</li>
+ <li><strong>Company matching</strong> — Meetings are linked to portfolio companies by matching participant email domains against the company_domains table.</li>
+ <li><strong>GHL</strong> — Contact details, SLA status, and message history are pulled from GoHighLevel sub-accounts via Private Integration Tokens.</li>
+ <li><strong>Sync schedule</strong> — Read.ai syncs on every scheduled run and can be triggered manually from the Meetings page. Reports aggregate this data weekly.</li>
+ </ul>
+ </div>
+ </div>
+ </div>
  <p className="text-xs text-slate-500 dark:text-slate-400">
  Weekly operations summaries — auto-generated Fridays at 4 PM CST
  </p>

@@ -457,12 +457,30 @@ function LinkedClientBadge({ companyId }: { companyId: string }) {
     ? `https://app.gohighlevel.com/v2/location/${client.ghl_location_id}/contacts/detail/${client.ghl_contact_id}`
     : null;
 
+  const contactCompanyName = (client?.contact_company_name as string) ?? '';
+  const hasBusinessName = contactCompanyName && contactCompanyName.toLowerCase() !== 'restoration inbound';
+  const isOurCompany = contactCompanyName && contactCompanyName.toLowerCase() === 'restoration inbound';
+
   return (
     <div className="relative inline-flex items-center">
       {clientName ? (
         <div className="flex items-center gap-1.5 ml-3 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/50 border border-teal-200 dark:border-teal-800">
           <UserCircle size={14} className="text-teal-600 dark:text-teal-400" />
           <span className="text-xs font-medium text-teal-700 dark:text-teal-400">{clientName}</span>
+          {hasBusinessName && (
+            <button onClick={(e) => { e.stopPropagation(); if (ghlUrl) api.openInChrome(ghlUrl); }}
+              className="text-[10px] text-green-600 dark:text-green-400 font-medium hover:underline cursor-pointer"
+              title={`${contactCompanyName} — Open in GHL`}>
+              {contactCompanyName}
+            </button>
+          )}
+          {!contactCompanyName && ghlUrl && (
+            <button onClick={(e) => { e.stopPropagation(); api.openInChrome(ghlUrl); }}
+              className="text-[10px] text-red-500 dark:text-red-400 font-medium hover:underline cursor-pointer"
+              title="No business name set — Open in GHL to add one">
+              No business name
+            </button>
+          )}
           {ghlUrl && (
             <button onClick={(e) => { e.stopPropagation(); api.openInChrome(ghlUrl); }}
               className="text-teal-500 hover:text-teal-700" title="Open in GHL">
@@ -485,7 +503,7 @@ function LinkedClientBadge({ companyId }: { companyId: string }) {
       {searching && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setSearching(false); setSearchQuery(''); setSearchResults([]); }} />
-          <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl w-80 overflow-hidden">
+          <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-2 border-b border-slate-100 dark:border-slate-700/50">
               <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -698,7 +716,14 @@ export default function CompanyPage() {
                     {showTrend ? 'Hide trend' : 'View 30-day trend'}
                   </button>
                 </div>
-                <HealthBreakdown components={healthData.components} />
+                <HealthBreakdown
+                  components={healthData.components}
+                  companyId={company.id}
+                  onLinked={() => {
+                    api.getHealthScore(company.id).then(setHealthData);
+                    api.getEntityLinks(company.id).then(setEntityLinks);
+                  }}
+                />
                 {showTrend && (
                   <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                     <HealthTrendChart history={healthHistory} />
@@ -824,7 +849,7 @@ function SyncProgressPanel({ progress, collapsed, onToggle }: { progress: LivePr
                 <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(progress.messagesPercent, 100)}%` }} />
               </div>
               <span className="text-xs text-slate-400 dark:text-slate-500">
-                {progress.contactsWithMessages} / {progress.contactsSynced} contacts have messages
+                {progress.messagesTotal.toLocaleString()} messages synced
               </span>
             </div>
           </div>

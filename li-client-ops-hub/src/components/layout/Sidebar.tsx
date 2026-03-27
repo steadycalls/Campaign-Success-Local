@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Sun, LayoutGrid, Users, Activity, Settings, Brain, FileText, Globe, ShieldCheck, Mic, MessageCircle, RefreshCw, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Sun, LayoutGrid, Users, Activity, Settings, Brain, FileText, Globe, ShieldCheck, Mic, MessageCircle, Mail, RefreshCw, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { useSyncPulse } from '../../hooks/useSyncPulse';
 
 const mainNav = [
@@ -13,6 +13,7 @@ const mainNav = [
   { to: '/meetings', label: 'Meetings', icon: Mic, end: true },
   { to: '/discord', label: 'Discord', icon: MessageCircle, end: true },
   { to: '/kinsta', label: 'Kinsta', icon: Globe, end: true },
+  { to: '/gmail', label: 'Gmail', icon: Mail, end: true },
   { to: '/rag', label: 'RAG', icon: Brain, end: true },
 ];
 
@@ -20,6 +21,7 @@ const settingsNav = [
   { to: '/settings', label: 'Integrations', end: true },
   { to: '/settings/subaccounts', label: 'Sub-Accounts', end: true },
   { to: '/settings/teamwork', label: 'Teamwork', end: true },
+  { to: '/settings/google', label: 'Google', end: true },
   { to: '/settings/calendar', label: 'Google Calendar', end: true },
   { to: '/settings/gdrive', label: 'Google Drive', end: true },
   { to: '/settings/associations', label: 'Associations', end: true },

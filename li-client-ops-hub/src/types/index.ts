@@ -448,6 +448,8 @@ export interface HealthRanking {
 
 export interface AtRiskCompany extends HealthRanking {
   health_components_json: string;
+  client_first_name?: string | null;
+  client_last_name?: string | null;
 }
 
 // ── Entity Links ────────────────────────────────────────────────────
@@ -965,6 +967,11 @@ export interface ElectronAPI {
   getContactsByEmails: (emails: string[]) => Promise<Array<{
     email: string; ghl_contact_id: string | null; first_name: string | null;
     last_name: string | null; company_id: string; ghl_location_id: string | null;
+    assigned_to_name: string | null;
+  }>>;
+  getMeetingsForEmails: (emails: string[], limit?: number) => Promise<Array<{
+    id: string; title: string | null; meeting_date: string; start_time_ms: number | null;
+    report_url: string | null; readai_meeting_id: string | null; participants_count: number;
   }>>;
   getMessages: (contactId: string) => Promise<Message[]>;
   getContactMessageSyncStatus: (companyId: string) => Promise<Array<{ id: string; messages_synced_at: string | null; messages_stored: number }>>;
@@ -1239,6 +1246,9 @@ export interface ElectronAPI {
   linkCalendarEvent: (eventId: string, companyId: string) => Promise<{ success: boolean }>;
   checkGoogleScopes: () => Promise<{ authorized: boolean; email?: string; hasCalendar: boolean; needsReauth: boolean }>;
   getCalendarStats: () => Promise<{ totalEvents: number; matchedEvents: number; unmatchedEvents: number; selectedCalendars: number }>;
+  getAllCalendarEvents: (limit?: number) => Promise<Array<Record<string, unknown>>>;
+  onCalendarSyncProgress: (cb: (...args: unknown[]) => void) => void;
+  offCalendarSyncProgress: (cb: (...args: unknown[]) => void) => void;
 
   // Health Score
   getHealthScore: (companyId: string) => Promise<HealthScoreData | null>;

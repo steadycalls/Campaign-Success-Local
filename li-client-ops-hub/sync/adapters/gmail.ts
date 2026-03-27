@@ -3,7 +3,7 @@ import { queryAll, queryOne, execute, executeInTransaction } from '../../db/clie
 import { delay } from '../utils/rateLimit';
 import { type SyncCounts } from '../utils/logger';
 import { logger } from '../../lib/logger';
-import { refreshGoogleToken } from './gdrive-auth';
+import { getGoogleToken } from './google-token';
 
 const GMAIL_BASE = 'https://gmail.googleapis.com';
 
@@ -12,37 +12,6 @@ const GENERIC_DOMAINS = new Set([
   'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
   'protonmail.com', 'zoho.com', 'yandex.com', 'mail.com',
 ]);
-
-// ── Token management (reuses google_auth table) ─────────────────────
-
-function getEnvValue(key: string): string {
-  return process.env[key] || '';
-}
-
-async function getValidAccessToken(accountId: string = 'default'): Promise<string> {
-  const auth = queryOne(
-    'SELECT access_token, refresh_token, expires_at FROM google_auth WHERE id = ?',
-    [accountId]
-  );
-  if (!auth?.access_token || !auth?.refresh_token) {
-    throw new Error('Google not authorized. Go to Settings > Integrations to authorize.');
-  }
-
-  const expiresAt = new Date(auth.expires_at as string).getTime();
-  if (Date.now() >= expiresAt - 300_000) {
-    const clientId = getEnvValue('GOOGLE_CLIENT_ID');
-    const clientSecret = getEnvValue('GOOGLE_CLIENT_SECRET');
-    const refreshed = await refreshGoogleToken(clientId, clientSecret, auth.refresh_token as string);
-    const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-    execute(
-      `UPDATE google_auth SET access_token = ?, expires_at = ?, updated_at = datetime('now') WHERE id = ?`,
-      [refreshed.access_token, newExpiresAt, accountId]
-    );
-    return refreshed.access_token;
-  }
-
-  return auth.access_token as string;
-}
 
 // ── Gmail API fetch ─────────────────────────────────────────────────
 
@@ -189,22 +158,30 @@ function matchEmailToCompany(emails: string[]): { companyId: string | null; meth
  * Sync Gmail for the default OAuth account.
  * Fetches messages from the last N days.
  */
-export async function syncGmail(sinceDays: number = 30, accountId: string = 'default'): Promise<SyncCounts> {
-  const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
+export type GmailProgressCallback = (data: { percent: number; fetched: number; created: number; currentSubject?: string; page?: number }) => void;
 
-  const token = await getValidAccessToken(accountId);
+export async function syncGmail(
+  sinceDays: number = 30,
+  accountId: string = 'default',
+  onProgress?: GmailProgressCallback
+): Promise<SyncCounts> {
+  const counts: SyncCounts = { found: 0, created: 0, updated: 0 };
 
   // Get account email for direction detection
   const authRow = queryOne('SELECT email FROM google_auth WHERE id = ?', [accountId]);
   const accountEmail = ((authRow?.email as string) ?? '').toLowerCase();
+
+  const token = await getGoogleToken('gmail', accountId !== 'default' ? accountEmail : undefined);
 
   // Build search query: messages from the last N days
   const cutoff = Math.floor((Date.now() - sinceDays * 86400000) / 1000);
   const query = encodeURIComponent(`after:${cutoff} -in:drafts -in:spam -in:trash`);
 
   let pageToken: string | null = null;
+  let pageNumber = 0;
 
   while (true) {
+    pageNumber++;
     let url = `/gmail/v1/users/me/messages?q=${query}&maxResults=100`;
     if (pageToken) url += `&pageToken=${pageToken}`;
 
@@ -218,6 +195,11 @@ export async function syncGmail(sinceDays: number = 30, accountId: string = 'def
 
     for (const msgRef of messageIds) {
       counts.found++;
+
+      // Report progress every 5 messages
+      if (onProgress && counts.found % 5 === 0) {
+        onProgress({ percent: 0, fetched: counts.found, created: counts.created, page: pageNumber });
+      }
 
       // Skip if already synced
       const existing = queryOne('SELECT id FROM gmail_messages WHERE id = ?', [msgRef.id]);
