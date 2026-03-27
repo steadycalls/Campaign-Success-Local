@@ -56,16 +56,16 @@ export default function SyncProgressBar({ companyId }: Props) {
   const eta = formatETA(progress.estimatedEndAt);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 my-2">
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 my-2">
       {/* Top row: spinner + message + percentage */}
       <div className="flex items-center gap-2">
-        {!isComplete && <Loader2 size={14} className="shrink-0 animate-spin text-teal-600" />}
-        <span className="flex-1 truncate text-xs text-slate-700">{progress.message}</span>
-        <span className="shrink-0 text-xs font-medium text-slate-600">{progress.progress}%</span>
+        {!isComplete && <Loader2 size={14} className="shrink-0 animate-spin text-teal-600 dark:text-teal-400" />}
+        <span className="flex-1 truncate text-xs text-slate-700 dark:text-slate-300">{progress.message}</span>
+        <span className="shrink-0 text-xs font-medium text-slate-600 dark:text-slate-400">{progress.progress}%</span>
       </div>
 
       {/* Progress bar */}
-      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
         <div
           className={`h-2 rounded-full transition-all duration-500 ${isComplete ? 'bg-green-500' : 'bg-teal-500'}`}
           style={{ width: `${progress.progress}%` }}
@@ -73,7 +73,7 @@ export default function SyncProgressBar({ companyId }: Props) {
       </div>
 
       {/* Bottom row: batch counter, elapsed, ETA */}
-      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-3">
           {isBatch && (
             <span>
@@ -84,7 +84,7 @@ export default function SyncProgressBar({ companyId }: Props) {
           {elapsed && !isComplete && <span>Elapsed: {elapsed}</span>}
         </div>
         {eta && !isComplete && (
-          <span className="text-teal-600">Est. completion: {eta}</span>
+          <span className="text-teal-600 dark:text-teal-400">Est. completion: {eta}</span>
         )}
         {isComplete && (
           <span className="text-green-600">

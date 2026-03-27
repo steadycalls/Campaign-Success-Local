@@ -3,12 +3,10 @@ import { queryAll, queryOne, execute } from '../../db/client';
 import { syncLocations, testSubAccountPit } from '../../sync/adapters/ghl';
 import { syncCompany, type SyncProgressData } from '../../sync/engine';
 import { logSyncStart, logSyncEnd } from '../../sync/utils/logger';
+import { ipcBatcher } from './batcher';
 
 function sendProgress(data: SyncProgressData): void {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('sync:progress', data);
-  }
+  ipcBatcher.send('sync:progress', data);
 }
 
 function readEnvVar(key: string): string | undefined {

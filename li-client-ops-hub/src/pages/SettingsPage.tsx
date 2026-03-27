@@ -18,7 +18,7 @@ function IntegrationsSection() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-sm text-slate-400">Loading...</p>;
+  if (loading) return <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -57,12 +57,12 @@ function SLASection() {
   return (
     <div className="flex items-end gap-4">
       <div>
-        <label className="block text-xs font-medium text-slate-500">Warning threshold (days)</label>
-        <input type="number" min={1} value={warning} onChange={(e) => setWarning(e.target.value)} className="mt-1 w-24 rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Warning threshold (days)</label>
+        <input type="number" min={1} value={warning} onChange={(e) => setWarning(e.target.value)} className="mt-1 w-24 rounded border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-sm dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-500">Violation threshold (days)</label>
-        <input type="number" min={1} value={violation} onChange={(e) => setViolation(e.target.value)} className="mt-1 w-24 rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Violation threshold (days)</label>
+        <input type="number" min={1} value={violation} onChange={(e) => setViolation(e.target.value)} className="mt-1 w-24 rounded border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-sm dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
       </div>
       <button onClick={handleSave} className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700">
         {saved ? 'Saved!' : 'Save'}
@@ -91,12 +91,12 @@ function SyncScheduleSection() {
 
   return (
     <div className="flex items-center justify-between">
-      <p className="text-sm text-slate-700">Every 2 hours, 6 AM - 8 PM CT, weekdays</p>
+      <p className="text-sm text-slate-700 dark:text-slate-300">Every 2 hours, 6 AM - 8 PM CT, weekdays</p>
       <label className="flex cursor-pointer items-center gap-2">
-        <span className="text-xs text-slate-500">{enabled ? 'Enabled' : 'Disabled'}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{enabled ? 'Enabled' : 'Disabled'}</span>
         <div className="relative">
           <input type="checkbox" checked={enabled} onChange={toggle} className="sr-only" />
-          <div className={`h-5 w-9 rounded-full transition-colors ${enabled ? 'bg-teal-500' : 'bg-slate-300'}`} />
+          <div className={`h-5 w-9 rounded-full transition-colors ${enabled ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
           <div className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : ''}`} />
         </div>
       </label>
@@ -125,16 +125,16 @@ function AppInfoSection() {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <span className="text-slate-500">Version</span>
-        <span className="font-mono text-slate-800">{info.version}</span>
-        <span className="text-slate-500">Database</span>
-        <span className="truncate font-mono text-xs text-slate-600">{info.dbPath}</span>
+        <span className="text-slate-500 dark:text-slate-400">Version</span>
+        <span className="font-mono text-slate-800 dark:text-slate-200">{info.version}</span>
+        <span className="text-slate-500 dark:text-slate-400">Database</span>
+        <span className="truncate font-mono text-xs text-slate-600 dark:text-slate-400">{info.dbPath}</span>
       </div>
       <div className="flex gap-2 pt-1">
-        <button onClick={() => api.openDataFolder()} className="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+        <button onClick={() => api.openDataFolder()} className="flex items-center gap-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
           <FolderOpen size={13} /> Open Data Folder
         </button>
-        <button onClick={handleReset} disabled={resetting} className="flex items-center gap-1.5 rounded border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
+        <button onClick={handleReset} disabled={resetting} className="flex items-center gap-1.5 rounded border border-red-300 dark:border-red-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40">
           <RotateCcw size={13} /> {resetting ? 'Resetting...' : 'Reset Database'}
         </button>
       </div>
@@ -145,19 +145,19 @@ function AppInfoSection() {
 // ── Main Page ─────────────────────────────────────────────────────────
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-3 text-lg font-semibold text-slate-800">{children}</h2>;
+  return <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-200">{children}</h2>;
 }
 
 function SectionCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border border-slate-200 bg-white p-5">{children}</div>;
+  return <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">{children}</div>;
 }
 
 export default function SettingsPage() {
   return (
     <div className="space-y-8 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage integrations and sync configuration.</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Settings</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage integrations and sync configuration.</p>
       </div>
 
       <section>

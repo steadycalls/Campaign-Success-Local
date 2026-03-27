@@ -2,6 +2,9 @@ import { ipcMain } from 'electron';
 import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { syncDiscordChannels, testDiscordConnection } from '../../sync/adapters/discord';
+import { syncTeamworkProjects } from '../../sync/adapters/teamwork';
+import { logSyncStart, logSyncEnd } from '../../sync/utils/logger';
+import { runAutoMatch } from '../../sync/matching/autoMatch';
 
 // ── Helper: update has_* flags on the company linked to a client ──────
 
@@ -109,8 +112,13 @@ export function registerAssociationHandlers(): void {
     return queryAll(
       `SELECT c.*,
         (SELECT GROUP_CONCAT(ca.association_type || ':' || COALESCE(ca.target_name, ''), '|')
-         FROM client_associations ca WHERE ca.client_contact_id = c.id) as associations_summary
+         FROM client_associations ca WHERE ca.client_contact_id = c.id) as associations_summary,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id) as message_count,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.message_at >= datetime('now', '-7 days')) as msgs_7d,
+        (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id AND m.message_at >= datetime('now', '-30 days')) as msgs_30d,
+        co.name as ghl_company_name
        FROM contacts c
+       LEFT JOIN companies co ON co.id = c.company_id
        WHERE c.tags LIKE '%client%'
        ORDER BY c.first_name ASC, c.last_name ASC`
     );
@@ -342,6 +350,19 @@ export function registerAssociationHandlers(): void {
     );
   });
 
+  ipcMain.handle('teamwork:sync', async () => {
+    const runId = logSyncStart('teamwork', 'manual');
+    try {
+      const counts = await syncTeamworkProjects();
+      logSyncEnd(runId, 'success', counts);
+      return { success: true, ...counts };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logSyncEnd(runId, 'error', {}, message);
+      return { success: false, message };
+    }
+  });
+
   // ── Read.ai with associations ───────────────────────────────────────
 
   ipcMain.handle('readai:getMeetingsWithAssociations', (_e, filters?: { days?: number }) => {
@@ -362,7 +383,9 @@ export function registerAssociationHandlers(): void {
     const clients = queryAll(
       `SELECT c.id, c.ghl_contact_id, c.first_name, c.last_name, c.email, c.phone,
               c.sla_status, c.days_since_outbound, c.last_outbound_at,
-              c.company_id, co.name as company_name
+              c.company_id, c.company_name as ghl_company_name,
+              co.name as company_name, co.ghl_location_id,
+              (SELECT COUNT(*) FROM messages m WHERE m.contact_id = c.id) as message_count
        FROM contacts c
        LEFT JOIN companies co ON co.id = c.company_id
        WHERE c.tags LIKE '%client%'
@@ -423,5 +446,80 @@ export function registerAssociationHandlers(): void {
         readai_meeting_count: meetingCountMap[c.id as string] || 0,
       };
     });
+  });
+
+  // ── Entity Links (company-level cross-platform) ─────────────────────
+
+  ipcMain.handle('entityLinks:getForCompany', (_e, companyId: string) => {
+    return queryAll(
+      'SELECT * FROM entity_links WHERE company_id = ? ORDER BY platform ASC',
+      [companyId]
+    );
+  });
+
+  ipcMain.handle('entityLinks:set', (_e, params: {
+    companyId: string;
+    platform: string;
+    platformId: string;
+    platformName: string;
+  }) => {
+    const existing = queryOne(
+      'SELECT id FROM entity_links WHERE company_id = ? AND platform = ? AND platform_id = ?',
+      [params.companyId, params.platform, params.platformId]
+    );
+    if (existing) {
+      execute(
+        `UPDATE entity_links SET platform_name = ?, match_type = 'manual', confidence = 1.0, updated_at = datetime('now') WHERE id = ?`,
+        [params.platformName, existing.id as string]
+      );
+    } else {
+      execute(
+        `INSERT INTO entity_links (id, company_id, platform, platform_id, platform_name, match_type, confidence)
+         VALUES (?, ?, ?, ?, ?, 'manual', 1.0)`,
+        [randomUUID(), params.companyId, params.platform, params.platformId, params.platformName]
+      );
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle('entityLinks:remove', (_e, linkId: string) => {
+    execute('DELETE FROM entity_links WHERE id = ?', [linkId]);
+    return { success: true };
+  });
+
+  ipcMain.handle('entityLinks:runAutoMatch', () => {
+    const result = runAutoMatch();
+    return { success: true, ...result };
+  });
+
+  ipcMain.handle('entityLinks:getUnlinkedSummary', () => {
+    const totalCompanies = queryOne("SELECT COUNT(*) as cnt FROM companies WHERE status = 'active'");
+    const total = (totalCompanies?.cnt as number) || 0;
+
+    const withTeamwork = queryOne("SELECT COUNT(DISTINCT company_id) as cnt FROM entity_links WHERE platform = 'teamwork'");
+    const withDrive = queryOne("SELECT COUNT(DISTINCT company_id) as cnt FROM entity_links WHERE platform = 'gdrive'");
+    const withDiscord = queryOne("SELECT COUNT(DISTINCT company_id) as cnt FROM entity_links WHERE platform = 'discord'");
+    const withKinsta = queryOne("SELECT COUNT(DISTINCT company_id) as cnt FROM entity_links WHERE platform = 'kinsta'");
+
+    const unlinkedTeamwork = queryOne(
+      "SELECT COUNT(*) as cnt FROM teamwork_projects WHERE status = 'active' AND id NOT IN (SELECT platform_id FROM entity_links WHERE platform = 'teamwork')"
+    );
+    const unlinkedDrive = queryOne(
+      "SELECT COUNT(*) as cnt FROM drive_folders WHERE company_id IS NULL"
+    );
+    const unlinkedKinsta = queryOne(
+      "SELECT COUNT(*) as cnt FROM kinsta_sites WHERE company_id IS NULL"
+    );
+
+    return {
+      totalCompanies: total,
+      companiesWithTeamwork: (withTeamwork?.cnt as number) || 0,
+      companiesWithDrive: (withDrive?.cnt as number) || 0,
+      companiesWithDiscord: (withDiscord?.cnt as number) || 0,
+      companiesWithKinsta: (withKinsta?.cnt as number) || 0,
+      unlinkedTeamworkProjects: (unlinkedTeamwork?.cnt as number) || 0,
+      unlinkedDriveFolders: (unlinkedDrive?.cnt as number) || 0,
+      unlinkedKinstaSites: (unlinkedKinsta?.cnt as number) || 0,
+    };
   });
 }

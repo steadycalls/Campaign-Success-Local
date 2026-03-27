@@ -39,9 +39,9 @@ export function registerGdriveHandlers(): void {
       ).toISOString();
 
       execute(
-        `INSERT OR REPLACE INTO google_auth (id, access_token, refresh_token, expires_at, email, authorized_at, updated_at)
-         VALUES ('default', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-        [tokens.access_token, tokens.refresh_token, expiresAt, userInfo.email || null]
+        `INSERT OR REPLACE INTO google_auth (id, access_token, refresh_token, expires_at, email, scopes, authorized_at, updated_at)
+         VALUES ('default', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        [tokens.access_token, tokens.refresh_token, expiresAt, userInfo.email || null, tokens.scope || '']
       );
 
       // Update integration status

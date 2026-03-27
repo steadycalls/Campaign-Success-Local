@@ -18,7 +18,7 @@ function relativeTime(iso: string): string {
 export default function MessageSyncBadge({ syncedAt, messageCount }: Props) {
   if (!syncedAt) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-900/50 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">
         Not synced
       </span>
     );
@@ -29,7 +29,7 @@ export default function MessageSyncBadge({ syncedAt, messageCount }: Props) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
-        isStale ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
+        isStale ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' : 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400'
       }`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${isStale ? 'bg-amber-400' : 'bg-green-400'}`} />

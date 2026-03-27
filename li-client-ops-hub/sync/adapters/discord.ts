@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { delay } from '../utils/rateLimit';
 import { type SyncCounts } from '../utils/logger';
+import { logger } from '../../lib/logger';
 
 const DISCORD_BASE = 'https://discord.com/api/v10';
 
@@ -12,7 +13,7 @@ async function discordFetch(path: string, botToken: string): Promise<unknown> {
 
   if (res.status === 429) {
     const retryAfter = parseFloat(res.headers.get('Retry-After') ?? '5');
-    console.log(`[discord] Rate limited, waiting ${retryAfter}s`);
+    logger.warn('Discord', 'Rate limited', { retry_after_s: retryAfter });
     await delay(retryAfter * 1000);
     const retry = await fetch(`${DISCORD_BASE}${path}`, {
       headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },

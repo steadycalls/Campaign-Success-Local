@@ -108,20 +108,10 @@ async function testTeamwork(env: Record<string, string>): Promise<{ success: boo
   return { success: true, message: `Connected to Teamwork (${count} project(s) found)` };
 }
 
-async function testReadAiApi(env: Record<string, string>): Promise<{ success: boolean; message: string }> {
-  const apiKey = env['READAI_API_KEY'];
-  if (!apiKey) return { success: false, message: 'READAI_API_KEY is not set' };
-
-  const res = await fetch('https://api.read.ai/v1/meetings?limit=1', {
-    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { success: false, message: `Read.ai API returned ${res.status}: ${text.slice(0, 200)}` };
-  }
-  const data = (await res.json()) as { data?: unknown[]; has_more?: boolean };
-  return { success: true, message: `Connected to Read.ai (${data.has_more ? 'multiple' : data.data?.length ?? 0} meetings accessible)` };
+async function testReadAiApi(_env: Record<string, string>): Promise<{ success: boolean; message: string }> {
+  // Delegate to the OAuth-based test handler
+  const { testReadAiOAuthConnection } = await import('./readai-auth');
+  return testReadAiOAuthConnection();
 }
 
 async function testReadAiMcp(env: Record<string, string>): Promise<{ success: boolean; message: string }> {
@@ -176,6 +166,53 @@ async function testDiscord(env: Record<string, string>): Promise<{ success: bool
   return { success: true, message: `Connected as ${user.username}` };
 }
 
+async function testKinstaApi(env: Record<string, string>): Promise<{ success: boolean; message: string }> {
+  const apiKey = env['KINSTA_API_KEY'];
+  const companyId = env['KINSTA_COMPANY_ID'];
+  if (!apiKey) return { success: false, message: 'KINSTA_API_KEY is not set' };
+  if (!companyId) return { success: false, message: 'KINSTA_COMPANY_ID is not set' };
+
+  const res = await fetch(`https://api.kinsta.com/v2/sites?company=${encodeURIComponent(companyId)}`, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { success: false, message: `Kinsta API returned ${res.status}: ${text.slice(0, 200)}` };
+  }
+  const data = (await res.json()) as { company?: { sites?: unknown[] } };
+  const siteCount = data.company?.sites?.length ?? 0;
+  return { success: true, message: `Connected. ${siteCount} sites found.` };
+}
+
+async function testAnthropic(env: Record<string, string>): Promise<{ success: boolean; message: string }> {
+  const apiKey = env['ANTHROPIC_API_KEY'];
+  if (!apiKey) return { success: false, message: 'ANTHROPIC_API_KEY is not set' };
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'ping' }],
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { success: false, message: `Anthropic API returned ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { success: true, message: 'Claude API key is valid.' };
+  } catch (err: unknown) {
+    return { success: false, message: err instanceof Error ? err.message : 'Connection failed' };
+  }
+}
+
 const testFunctions: Record<string, (env: Record<string, string>) => Promise<{ success: boolean; message: string }>> = {
   ghl_agency: testGHLAgency,
   teamwork: testTeamwork,
@@ -184,6 +221,8 @@ const testFunctions: Record<string, (env: Record<string, string>) => Promise<{ s
   readai_mcp: testReadAiMcp,
   gdrive: testGDrive,
   discord: testDiscord,
+  kinsta: testKinstaApi,
+  anthropic: testAnthropic,
 };
 
 // ── Register handlers ─────────────────────────────────────────────────

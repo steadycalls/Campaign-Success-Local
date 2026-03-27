@@ -42,7 +42,7 @@ export default function MultiEmailInput({ emails, defaultEmail, onChange, matchC
 
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-slate-600">
+      <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
         Read.ai Email Addresses
       </div>
 
@@ -56,12 +56,12 @@ export default function MultiEmailInput({ emails, defaultEmail, onChange, matchC
               placeholder="email@company.com"
               className={`w-full px-2.5 py-1.5 text-sm border rounded-md
                 ${!isValidEmail(email) && email.length > 0
-                  ? 'border-red-300 focus:ring-red-500'
-                  : 'border-slate-200 focus:ring-teal-500'
+                  ? 'border-red-300 dark:border-red-700 focus:ring-red-500'
+                  : 'border-slate-200 dark:border-slate-700 focus:ring-teal-500'
                 } focus:outline-none focus:ring-1`}
             />
             {idx === 0 && email.trim().toLowerCase() === defaultEmail?.trim().toLowerCase() && defaultEmail && (
-              <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 bg-slate-100 px-1 rounded">
+              <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-900/50 px-1 rounded">
                 GHL
               </span>
             )}
@@ -69,7 +69,7 @@ export default function MultiEmailInput({ emails, defaultEmail, onChange, matchC
           {emails.length > 1 && (
             <button
               onClick={() => handleRemove(idx)}
-              className="text-slate-400 hover:text-red-500 p-1 text-sm"
+              className="text-slate-400 dark:text-slate-500 hover:text-red-500 p-1 text-sm"
             >
               ✕
             </button>
@@ -83,7 +83,7 @@ export default function MultiEmailInput({ emails, defaultEmail, onChange, matchC
 
       <button
         onClick={handleAdd}
-        className="text-xs text-teal-600 hover:text-teal-700 flex items-center gap-1"
+        className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 flex items-center gap-1"
       >
         + Add another email
       </button>
@@ -95,7 +95,7 @@ export default function MultiEmailInput({ emails, defaultEmail, onChange, matchC
               {matchCount} meeting{matchCount !== 1 ? 's' : ''} found matching these emails
             </span>
           ) : (
-            <span className="text-slate-400">No meetings matched yet</span>
+            <span className="text-slate-400 dark:text-slate-500">No meetings matched yet</span>
           )}
         </div>
       )}

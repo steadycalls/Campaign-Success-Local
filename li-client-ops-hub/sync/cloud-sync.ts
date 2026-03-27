@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../db/client';
+import { logger } from '../lib/logger';
 
 // ── Config ────────────────────────────────────────────────────────────
 
@@ -178,9 +179,9 @@ export async function syncToCloud(fullResync: boolean = false): Promise<{ succes
           totalPushed += batch.length;
         }
 
-        console.log(`[cloud-sync] ${config.table}: pushed ${rows.length} rows`);
+        logger.cloud(`Pushed rows`, { table: config.table, rows: rows.length });
       } catch (err: unknown) {
-        console.error(`[cloud-sync] ${config.table} failed:`, err instanceof Error ? err.message : err);
+        logger.error('Cloud', `Table sync failed`, { table: config.table, error: err instanceof Error ? err.message : String(err) });
         // Continue with other tables
       }
     }
@@ -192,12 +193,12 @@ export async function syncToCloud(fullResync: boolean = false): Promise<{ succes
     setLastSyncAt(syncStartedAt);
     setLastError(null);
 
-    console.log(`[cloud-sync] Complete: ${totalPushed} rows pushed`);
+    logger.cloud('Sync complete', { rows_pushed: totalPushed });
     return { success: true, rowsPushed: totalPushed };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     setLastError(message);
-    console.error('[cloud-sync] Failed:', message);
+    logger.error('Cloud', 'Sync failed', { error: message });
     return { success: false, rowsPushed: totalPushed, error: message };
   } finally {
     isSyncing = false;
@@ -219,7 +220,7 @@ async function pushDeletes(): Promise<void> {
 
   // Clear processed deletes
   execute('DELETE FROM cloud_delete_log');
-  console.log(`[cloud-sync] Pushed ${deletes.length} deletes`);
+  logger.cloud('Pushed deletes', { count: deletes.length });
 }
 
 // ── Status ────────────────────────────────────────────────────────────
@@ -242,7 +243,7 @@ let syncInterval: ReturnType<typeof setInterval> | null = null;
 export function startCloudSyncTimer(intervalMs: number = 5 * 60 * 1000): void {
   if (syncInterval) return;
   if (!isEnabled()) {
-    console.log('[cloud-sync] Not enabled, skipping timer');
+    logger.cloud('Not enabled, skipping timer');
     return;
   }
 
@@ -251,13 +252,13 @@ export function startCloudSyncTimer(intervalMs: number = 5 * 60 * 1000): void {
     await syncToCloud();
   }, intervalMs);
 
-  console.log(`[cloud-sync] Timer started (every ${intervalMs / 1000}s)`);
+  logger.cloud('Timer started', { interval_s: intervalMs / 1000 });
 }
 
 export function stopCloudSyncTimer(): void {
   if (syncInterval) {
     clearInterval(syncInterval);
     syncInterval = null;
-    console.log('[cloud-sync] Timer stopped');
+    logger.cloud('Timer stopped');
   }
 }

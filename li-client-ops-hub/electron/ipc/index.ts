@@ -10,6 +10,16 @@ import { registerBriefingHandlers } from './briefing';
 import { registerCloudHandlers } from './cloud';
 import { registerCalendarHandlers } from './calendar';
 import { registerHealthHandlers } from './health';
+import { registerReportsHandlers } from './reports';
+import { registerKinstaHandlers } from './kinsta';
+import { registerNotificationHandlers } from './notifications';
+import { registerReadAiAuthHandlers } from './readai-auth';
+import { registerReadAiSyncHandlers } from './readai-sync';
+import { registerA2PHandlers } from './a2p';
+import { registerSEOHandlers } from './seo';
+import { registerSuggestionHandlers } from './suggestions';
+import { registerGmailHandlers } from './gmail';
+import { registerGoogleAccountHandlers } from './google-accounts';
 
 export function registerIPCHandlers(): void {
   registerDBHandlers();
@@ -24,4 +34,14 @@ export function registerIPCHandlers(): void {
   registerCloudHandlers();
   registerCalendarHandlers();
   registerHealthHandlers();
+  registerReportsHandlers();
+  registerKinstaHandlers();
+  registerNotificationHandlers();
+  registerReadAiAuthHandlers();
+  registerReadAiSyncHandlers();
+  registerA2PHandlers();
+  registerSEOHandlers();
+  registerSuggestionHandlers();
+  registerGmailHandlers();
+  registerGoogleAccountHandlers();
 }

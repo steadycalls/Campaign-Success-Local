@@ -27,7 +27,7 @@ export default function ColumnTooltip({ label, tooltip, children }: ColumnToolti
       onMouseLeave={handleMouseLeave}
     >
       {children || <span>{label}</span>}
-      <Info size={11} className="text-slate-300 flex-shrink-0" />
+      <Info size={11} className="text-slate-300 dark:text-slate-500 flex-shrink-0" />
       {show && (
         <div className="absolute left-0 top-full mt-1.5 z-50 w-56 px-3 py-2
           bg-slate-800 text-white text-xs leading-relaxed rounded-lg shadow-lg

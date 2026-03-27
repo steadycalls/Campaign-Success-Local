@@ -49,13 +49,15 @@ export function registerHealthHandlers(): void {
 
   // Get critical/at-risk companies (for morning briefing)
   ipcMain.handle('health:getAtRisk', () => {
+    const RI_LOCATION_ID = process.env.RI_LOCATION_ID || 'g6zCuamu3IQlnY1ympGx';
     return queryAll(`
       SELECT id, name, health_score, health_grade, health_status, health_trend,
         health_components_json
       FROM companies
       WHERE status = 'active' AND health_status IN ('at_risk', 'critical')
+        AND (ghl_location_id IS NULL OR ghl_location_id != ?)
       ORDER BY health_score ASC
-    `);
+    `, [RI_LOCATION_ID]);
   });
 
   // Force recompute all health scores

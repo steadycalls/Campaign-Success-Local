@@ -4,9 +4,9 @@ interface AlertBannerProps {
 }
 
 const styles = {
-  info: 'bg-blue-50 text-blue-800 border-blue-200',
-  warning: 'bg-amber-50 text-amber-800 border-amber-200',
-  error: 'bg-red-50 text-red-800 border-red-200',
+  info: 'bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+  warning: 'bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  error: 'bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-400 border-red-200 dark:border-red-800',
 };
 
 export default function AlertBanner({ message, type = 'info' }: AlertBannerProps) {

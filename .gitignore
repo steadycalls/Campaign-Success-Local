@@ -28,3 +28,6 @@ Campaign-Success-Local/
 *.swp
 *.swo
 *.js.map
+
+# Monitor logs (stored locally, not in repo)
+cs-logs/

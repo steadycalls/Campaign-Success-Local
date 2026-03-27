@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, Circle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Circle, Loader2, ExternalLink } from 'lucide-react';
 import { api } from '../../lib/ipc';
-import type { Integration } from '../../types';
+import type { Integration, ReadAiAuthStatus } from '../../types';
 import CredentialInput from './CredentialInput';
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; color: string; label: string }> = {
@@ -21,7 +21,7 @@ interface DocLink {
 const INTEGRATION_DOC_LINKS: Record<string, DocLink[]> = {
   readai_api: [
     { label: 'API Reference', url: 'https://support.read.ai/hc/en-us/articles/49381161088659-API-Reference' },
-    { label: 'API Keys & Auth', url: 'https://support.read.ai/hc/en-us/articles/49381161088531-API-Keys-Authentication' },
+    { label: 'OAuth Docs', url: 'https://support.read.ai/hc/en-us/articles/49381161088531-API-Keys-Authentication' },
   ],
   readai_mcp: [
     { label: 'MCP Server Docs', url: 'https://support.read.ai/hc/en-us/articles/49381161088787-MCP-Server' },
@@ -39,6 +39,9 @@ const INTEGRATION_DOC_LINKS: Record<string, DocLink[]> = {
   gdrive: [
     { label: 'Drive API', url: 'https://developers.google.com/drive/api/reference/rest/v3' },
   ],
+  kinsta: [
+    { label: 'Kinsta API', url: 'https://kinsta.com/docs/kinsta-api/' },
+  ],
 };
 
 function DocLinkButton({ integrationName }: { integrationName: string }) {
@@ -52,7 +55,7 @@ function DocLinkButton({ integrationName }: { integrationName: string }) {
       <button
         onClick={() => window.open(links[0].url, '_blank')}
         className="absolute bottom-3 right-3 w-6 h-6 flex items-center justify-center
-          rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600
+          rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300
           transition-colors text-xs font-medium"
         title={`Open ${links[0].label}`}
       >
@@ -66,25 +69,236 @@ function DocLinkButton({ integrationName }: { integrationName: string }) {
       <button
         onClick={() => setShowMenu(!showMenu)}
         className="w-6 h-6 flex items-center justify-center rounded-full
-          bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600
+          bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300
           transition-colors text-xs font-medium"
         title="API Documentation"
       >
         ?
       </button>
       {showMenu && (
-        <div className="absolute bottom-8 right-0 bg-white border border-slate-200
+        <div className="absolute bottom-8 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
           rounded-lg shadow-lg py-1 min-w-[180px] z-50">
           {links.map((link, i) => (
             <button
               key={i}
               onClick={() => { window.open(link.url, '_blank'); setShowMenu(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-slate-600
-                hover:bg-slate-50 hover:text-teal-600"
+              className="w-full text-left px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400
+                hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-teal-600 dark:hover:text-teal-400"
             >
               {link.label} &#8599;
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Read.ai OAuth Section ────────────────────────────────────────────
+
+function ReadAiOAuthSection({ onStatusChange }: { onStatusChange: () => void }) {
+  const [readaiAuth, setReadaiAuth] = useState<ReadAiAuthStatus | null>(null);
+  const [curlCommand, setCurlCommand] = useState('');
+  const [authCode, setAuthCode] = useState('');
+  const [exchanging, setExchanging] = useState(false);
+  const [exchangeStep, setExchangeStep] = useState<string | null>(null);
+  const [readaiTesting, setReadaiTesting] = useState(false);
+  const [readaiResult, setReadaiResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [revoking, setRevoking] = useState(false);
+
+  const loadAuthStatus = useCallback(() => {
+    api.readaiGetAuthStatus().then(setReadaiAuth);
+  }, []);
+
+  useEffect(() => { loadAuthStatus(); }, [loadAuthStatus]);
+
+  const handleOpenAuth = async () => {
+    setReadaiResult(null);
+    const result = await api.readaiOpenAuthPage();
+    if (!result.success) {
+      setReadaiResult({ success: false, message: result.message ?? 'Failed to open auth page' });
+    }
+  };
+
+  const handleExchangeCurl = async () => {
+    if (!curlCommand.trim() && !authCode.trim()) return;
+    setExchanging(true);
+    setReadaiResult(null);
+
+    setExchangeStep('Parsing curl command...');
+    await new Promise(r => setTimeout(r, 200));
+
+    // Build the payload: curl command + optional auth code override
+    const payload = authCode.trim()
+      ? curlCommand.trim() + ` -d "code=${authCode.trim()}"`
+      : curlCommand.trim();
+
+    setExchangeStep('Sending token exchange request...');
+    const result = await api.readaiExchangeCurl(payload);
+
+    if (result.success) {
+      setExchangeStep('Token stored successfully!');
+      setCurlCommand('');
+      setAuthCode('');
+      loadAuthStatus();
+      onStatusChange();
+    } else {
+      setExchangeStep(null);
+    }
+    setReadaiResult({ success: result.success, message: result.message });
+    setExchanging(false);
+    if (result.success) setTimeout(() => setExchangeStep(null), 2000);
+  };
+
+  const handleTest = async () => {
+    setReadaiTesting(true);
+    setReadaiResult(null);
+    const result = await api.readaiTestConnection();
+    setReadaiResult({ success: result.success, message: result.message });
+    setReadaiTesting(false);
+    onStatusChange();
+  };
+
+  const handleRevoke = async () => {
+    setRevoking(true);
+    setReadaiResult(null);
+    await api.readaiRevoke();
+    setReadaiAuth(null);
+    setReadaiResult({ success: true, message: 'Authorization revoked.' });
+    setRevoking(false);
+    onStatusChange();
+  };
+
+  const handleReauthorize = () => {
+    setReadaiResult(null);
+    setReadaiAuth({ authorized: false, email: null, expiresAt: null, isExpired: false, authorizedAt: null, lastRefreshed: null, hasRefreshToken: false });
+  };
+
+  const isAuthorized = readaiAuth?.authorized === true;
+
+  return (
+    <div className="mt-4 border-t border-slate-100 dark:border-slate-700/50 pt-4">
+      <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-3">Authorization</h4>
+
+      {/* Auth status display */}
+      {isAuthorized && (
+        <div className={`rounded px-3 py-2 text-xs mb-3 ${
+          !readaiAuth.hasRefreshToken ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' :
+          readaiAuth.isExpired ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' :
+          'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400'
+        }`}>
+          <div>Authorized as <span className="font-medium">{readaiAuth.email ?? 'unknown'}</span></div>
+          {readaiAuth.expiresAt && (
+            <div className="mt-0.5">
+              {readaiAuth.isExpired
+                ? readaiAuth.hasRefreshToken
+                  ? 'Token expired. Will auto-refresh on next sync.'
+                  : 'Token expired. No refresh token — please re-authorize.'
+                : `Token expires ${new Date(readaiAuth.expiresAt).toLocaleTimeString()} (auto-refreshes)`}
+            </div>
+          )}
+          {readaiAuth.lastRefreshed && (
+            <div className="mt-0.5 opacity-75">
+              Last refreshed: {new Date(readaiAuth.lastRefreshed).toLocaleString()}
+            </div>
+          )}
+          {!readaiAuth.hasRefreshToken && (
+            <div className="mt-1 font-medium">
+              No refresh token stored. Re-authorize with offline_access scope to enable auto-refresh.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Test/action result */}
+      {readaiResult && (
+        <div className={`rounded px-3 py-2 text-xs mb-3 ${readaiResult.success ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400'}`}>
+          {readaiResult.message}
+        </div>
+      )}
+
+      {/* Not authorized: show auth flow */}
+      {!isAuthorized && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            1. Click "Open Read.ai Auth" — enter your Client ID, Client Secret, and redirect URI<br />
+            2. Authorize your account<br />
+            3. Copy the <strong>authorization code</strong> shown on the result page<br />
+            4. Click "Copy Command" and paste the full curl command below
+          </p>
+
+          <button
+            onClick={handleOpenAuth}
+            className="flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <ExternalLink size={12} />
+            Open Read.ai Auth
+          </button>
+
+          <div className="space-y-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Authorization Code</label>
+              <input
+                type="text"
+                value={authCode}
+                onChange={e => setAuthCode(e.target.value)}
+                placeholder="Paste the authorization code from the result page..."
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:border-teal-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Curl Command</label>
+              <textarea
+                value={curlCommand}
+                onChange={e => setCurlCommand(e.target.value)}
+                placeholder='Paste the full curl command (click "Copy Command" on the result page)'
+                rows={3}
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:border-teal-400 focus:outline-none resize-y"
+              />
+            </div>
+            <button
+              onClick={handleExchangeCurl}
+              disabled={(!curlCommand.trim() && !authCode.trim()) || exchanging}
+              className="flex items-center gap-1 rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {exchanging && <Loader2 size={12} className="animate-spin" />}
+              Exchange Token
+            </button>
+            {exchangeStep && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                {exchanging && <Loader2 size={10} className="animate-spin text-teal-500" />}
+                {!exchanging && exchangeStep.includes('successfully') && <CheckCircle size={10} className="text-green-500" />}
+                {exchangeStep}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Authorized: show action buttons */}
+      {isAuthorized && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleTest}
+            disabled={readaiTesting}
+            className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {readaiTesting && <Loader2 size={12} className="animate-spin" />}
+            Test Connection
+          </button>
+          <button
+            onClick={handleReauthorize}
+            className="rounded border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+          >
+            Re-authorize
+          </button>
+          <button
+            onClick={handleRevoke}
+            disabled={revoking}
+            className="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {revoking ? 'Revoking...' : 'Revoke'}
+          </button>
         </div>
       )}
     </div>
@@ -101,6 +315,7 @@ interface Props {
 export default function IntegrationCard({ integration, onStatusChange }: Props) {
   const envKeys: string[] = integration.env_keys ? JSON.parse(integration.env_keys) : [];
   const isGdrive = integration.name === 'gdrive';
+  const isReadAi = integration.name === 'readai_api';
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [hasValues, setHasValues] = useState<Record<string, boolean>>({});
@@ -182,11 +397,13 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
   const StatusIcon = cfg.icon;
 
   return (
-    <div className="relative rounded-lg border border-slate-200 bg-white p-5">
+    <div className="relative rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">{integration.display_name}</h3>
-          <p className="mt-0.5 text-xs text-slate-400">{integration.name}</p>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{integration.display_name}</h3>
+          <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+            {isReadAi ? 'OAuth 2.1 integration for meeting data, summaries, transcripts, and recordings.' : integration.name}
+          </p>
         </div>
         <div className={`flex items-center gap-1 text-xs font-medium ${cfg.color}`}>
           <StatusIcon size={14} />
@@ -199,11 +416,15 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
           {envKeys.map((key) => (
             <CredentialInput key={key} label={key} value={values[key] ?? ''} hasValue={hasValues[key] ?? false} onChange={(v) => handleChange(key, v)} />
           ))}
+          <button onClick={handleSave} disabled={!hasDirtyFields || saving}
+            className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40">
+            {saving ? 'Saving...' : 'Save Credentials'}
+          </button>
         </div>
       )}
 
       {testResult && (
-        <div className={`mt-3 rounded px-3 py-2 text-xs ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className={`mt-3 rounded px-3 py-2 text-xs ${testResult.success ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400'}`}>
           {testResult.message}
         </div>
       )}
@@ -213,12 +434,12 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
       )}
 
       {integration.last_tested_at && (
-        <p className="mt-2 text-xs text-slate-400">Last tested: {new Date(integration.last_tested_at).toLocaleString()}</p>
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Last tested: {new Date(integration.last_tested_at).toLocaleString()}</p>
       )}
 
       {/* Google Drive auth status */}
       {isGdrive && authStatus?.email && (
-        <div className="mt-3 rounded bg-green-50 px-3 py-2 text-xs text-green-700">
+        <div className="mt-3 rounded bg-green-50 dark:bg-green-950/30 px-3 py-2 text-xs text-green-700 dark:text-green-400">
           Authorized as <span className="font-medium">{authStatus.email}</span>
           {authStatus.expires_at && (
             <span className="text-green-600"> &middot; Token expires {new Date(authStatus.expires_at).toLocaleString()} (auto-refreshes)</span>
@@ -226,20 +447,24 @@ export default function IntegrationCard({ integration, onStatusChange }: Props) 
         </div>
       )}
 
+      {/* Read.ai OAuth section */}
+      {isReadAi && (
+        <ReadAiOAuthSection onStatusChange={onStatusChange} />
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
-        <button onClick={handleSave} disabled={!hasDirtyFields || saving} className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40">
-          {saving ? 'Saving...' : 'Save'}
-        </button>
         {isGdrive && (
           <button onClick={handleAuthorize} disabled={authorizing} className="flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40">
             {authorizing && <Loader2 size={12} className="animate-spin" />}
             Authorize Google Drive
           </button>
         )}
-        <button onClick={handleTest} disabled={testing} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-          {testing && <Loader2 size={12} className="animate-spin" />}
-          Test Connection
-        </button>
+        {!isReadAi && (
+          <button onClick={handleTest} disabled={testing} className="flex items-center gap-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
+            {testing && <Loader2 size={12} className="animate-spin" />}
+            Test Connection
+          </button>
+        )}
       </div>
 
       <DocLinkButton integrationName={integration.name} />

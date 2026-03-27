@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { queryAll, queryOne } from '../../db/client';
+import { getSmartPriorities } from '../../briefing/smartPriorities';
 
 const RI_LOCATION_ID = process.env.RI_LOCATION_ID || 'g6zCuamu3IQlnY1ympGx';
 
@@ -77,11 +78,13 @@ export function registerBriefingHandlers(): void {
 
   ipcMain.handle('briefing:getSyncAlerts', () => {
     return queryAll(`
-      SELECT * FROM sync_alerts
-      WHERE acknowledged = 0
+      SELECT sa.*, c.name as company_name
+      FROM sync_alerts sa
+      LEFT JOIN companies c ON c.id = sa.company_id
+      WHERE sa.acknowledged = 0
       ORDER BY
-        CASE severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
-        created_at DESC
+        CASE sa.severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+        sa.created_at DESC
       LIMIT 10
     `);
   });
@@ -245,5 +248,57 @@ export function registerBriefingHandlers(): void {
     );
 
     return activities.slice(0, 15);
+  });
+
+  // ── Smart Priorities (Claude-powered) ────────────────────────────────
+
+  ipcMain.handle('briefing:getSmartPriorities', async (_, forceRefresh?: boolean) => {
+    try {
+      return await getSmartPriorities(forceRefresh ?? false);
+    } catch (err: unknown) {
+      return [];
+    }
+  });
+
+  // ── Churn Risk Summary ────────────────────────────────────────────
+
+  ipcMain.handle('briefing:getChurnRisks', () => {
+    return queryAll(`
+      SELECT id, name, churn_risk_score, churn_risk_grade, churn_risk_reason,
+        monthly_revenue, contract_end, health_score, sla_days_since_contact
+      FROM companies
+      WHERE status = 'active' AND sync_enabled = 1
+        AND churn_risk_grade IN ('high', 'critical')
+        AND ghl_location_id != ?
+      ORDER BY churn_risk_score DESC
+    `, [RI_LOCATION_ID]);
+  });
+
+  // ── Linking Gaps ────────────────────────────────────────────────────
+  ipcMain.handle('briefing:getLinkingGaps', () => {
+    const total = queryOne("SELECT COUNT(*) as cnt FROM companies WHERE status = 'active'");
+    const totalCount = (total?.cnt as number) || 0;
+
+    const noTeamwork = queryAll(`
+      SELECT c.id, c.name FROM companies c
+      WHERE c.status = 'active' AND c.sync_enabled = 1
+        AND NOT EXISTS (SELECT 1 FROM entity_links el WHERE el.company_id = c.id AND el.platform = 'teamwork')
+        AND NOT EXISTS (SELECT 1 FROM teamwork_projects tp WHERE tp.company_id = c.id)
+      ORDER BY c.name LIMIT 10
+    `);
+
+    const noDrive = queryAll(`
+      SELECT c.id, c.name FROM companies c
+      WHERE c.status = 'active' AND c.sync_enabled = 1
+        AND NOT EXISTS (SELECT 1 FROM entity_links el WHERE el.company_id = c.id AND el.platform = 'gdrive')
+        AND c.drive_folder_id IS NULL
+      ORDER BY c.name LIMIT 10
+    `);
+
+    return {
+      total: totalCount,
+      noTeamwork: noTeamwork.map(c => ({ id: c.id as string, name: c.name as string })),
+      noDrive: noDrive.map(c => ({ id: c.id as string, name: c.name as string })),
+    };
   });
 }

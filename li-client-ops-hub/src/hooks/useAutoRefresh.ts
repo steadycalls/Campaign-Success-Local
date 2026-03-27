@@ -38,13 +38,24 @@ export function useAutoRefresh<T>(
     return () => clearInterval(id);
   }, [refresh, intervalMs]);
 
-  // Sync completion triggers immediate refresh
+  // Sync completion triggers immediate refresh (legacy direct + batched)
   useEffect(() => {
     const handler = (_event: unknown, d: { phase?: string }) => {
       if (d?.phase === 'complete') refresh();
     };
     api.onSyncProgress(handler as (...args: unknown[]) => void);
     return () => { api.offSyncProgress(handler as (...args: unknown[]) => void); };
+  }, [refresh]);
+
+  // Batched sync:progress — check if any event in batch signals completion
+  useEffect(() => {
+    const handler = (_event: unknown, batch: Array<{ phase?: string }>) => {
+      if (Array.isArray(batch) && batch.some((d) => d?.phase === 'complete')) {
+        refresh();
+      }
+    };
+    api.onBatch('sync:progress', handler as (...args: unknown[]) => void);
+    return () => { api.offBatch('sync:progress', handler as (...args: unknown[]) => void); };
   }, [refresh]);
 
   return { data, loading, refresh, lastRefreshed };

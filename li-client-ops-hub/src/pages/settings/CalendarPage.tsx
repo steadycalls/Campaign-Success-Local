@@ -50,8 +50,8 @@ export default function CalendarPage() {
     <div className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Google Calendar</h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Google Calendar</h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {scopes?.authorized
               ? `Authorized as ${scopes.email || 'unknown'}`
               : 'Not authorized — authorize via Google Drive integration'}
@@ -72,14 +72,14 @@ export default function CalendarPage() {
       </div>
 
       {syncResult && (
-        <p className="mt-2 text-xs text-teal-600">{syncResult}</p>
+        <p className="mt-2 text-xs text-teal-600 dark:text-teal-400">{syncResult}</p>
       )}
 
       {/* Stats */}
       {stats && (
-        <div className="mt-4 flex gap-6 text-sm text-slate-600">
+        <div className="mt-4 flex gap-6 text-sm text-slate-600 dark:text-slate-400">
           <span>Events: <span className="font-medium">{stats.totalEvents}</span></span>
-          <span>Matched: <span className="font-medium text-green-600">{stats.matchedEvents}</span></span>
+          <span>Matched: <span className="font-medium text-green-600 dark:text-green-400">{stats.matchedEvents}</span></span>
           <span>Unmatched: <span className="font-medium text-amber-600">{stats.unmatchedEvents}</span></span>
           <span>Calendars: <span className="font-medium">{stats.selectedCalendars}</span></span>
         </div>
@@ -88,30 +88,30 @@ export default function CalendarPage() {
       {/* Calendars list */}
       {calendars.length > 0 && (
         <div className="mt-4">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">Calendars</h2>
-          <div className="rounded-lg border border-slate-200 overflow-hidden">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Calendars</h2>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500">Calendar</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500">Access</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 text-center">Sync</th>
+                  <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Calendar</th>
+                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Access</th>
+                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400 text-center">Sync</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {calendars.map((cal) => (
-                  <tr key={cal.id as string} className="hover:bg-slate-50">
+                  <tr key={cal.id as string} className="hover:bg-slate-50 dark:hover:bg-slate-800">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        {cal.color && (
+                        {cal.color ? (
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cal.color as string }} />
-                        )}
-                        <span className="font-medium text-slate-800">{String(cal.name)}</span>
-                        {cal.primary_calendar ? <span className="text-[10px] text-teal-600 bg-teal-50 px-1 rounded">Primary</span> : null}
+                        ) : null}
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{String(cal.name)}</span>
+                        {cal.primary_calendar ? <span className="text-[10px] text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30 px-1 rounded">Primary</span> : null}
                       </div>
-                      {cal.description ? <div className="text-xs text-slate-400 mt-0.5 truncate max-w-[300px]">{String(cal.description)}</div> : null}
+                      {cal.description ? <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate max-w-[300px]">{String(cal.description)}</div> : null}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">{String(cal.access_role || '-')}</td>
+                    <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{String(cal.access_role || '-')}</td>
                     <td className="px-3 py-2.5 text-center">
                       <input
                         type="checkbox"
@@ -131,20 +131,20 @@ export default function CalendarPage() {
       {/* Unmatched events */}
       {unmatched.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-sm font-semibold text-slate-700 mb-2">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
             Unmatched Events ({unmatched.length})
           </h2>
-          <p className="text-xs text-slate-500 mb-2">Events with attendees but no client match</p>
-          <div className="rounded-lg border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Events with attendees but no client match</p>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[400px] overflow-y-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 sticky top-0">
                 <tr>
-                  <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500">Date</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500">Event</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500">Attendees</th>
+                  <th className="px-4 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Date</th>
+                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Event</th>
+                  <th className="px-3 py-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Attendees</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {unmatched.map((ev) => {
                   const attendees: Array<{ email: string; name: string }> = (() => {
                     try { return JSON.parse(String(ev.attendees_json || '[]')); } catch { return []; }
@@ -152,12 +152,12 @@ export default function CalendarPage() {
                   const extAttendees = attendees.filter(a => !a.email?.includes('logicinbound'));
 
                   return (
-                    <tr key={ev.id as string} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 text-xs text-slate-500">
+                    <tr key={ev.id as string} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <td className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
                         {ev.start_time ? new Date(ev.start_time as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
                       </td>
-                      <td className="px-3 py-2 text-sm text-slate-800">{String(ev.title)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">
+                      <td className="px-3 py-2 text-sm text-slate-800 dark:text-slate-200">{String(ev.title)}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                         {extAttendees.slice(0, 2).map(a => a.email).join(', ')}
                         {extAttendees.length > 2 ? ` +${extAttendees.length - 2}` : ''}
                       </td>
@@ -171,7 +171,7 @@ export default function CalendarPage() {
       )}
 
       {calendars.length === 0 && scopes?.authorized && (
-        <p className="mt-6 text-sm text-slate-400">No calendars synced yet. Click "Sync Calendar" to get started.</p>
+        <p className="mt-6 text-sm text-slate-400 dark:text-slate-500">No calendars synced yet. Click "Sync Calendar" to get started.</p>
       )}
     </div>
   );

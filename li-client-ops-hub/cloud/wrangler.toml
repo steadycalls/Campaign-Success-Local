@@ -5,4 +5,4 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "li-ops-hub-cloud"
-database_id = "" # Fill in after running: wrangler d1 create li-ops-hub-cloud
+database_id = "4543ec2e-1cc3-45cf-93c5-77c20af83b2e"

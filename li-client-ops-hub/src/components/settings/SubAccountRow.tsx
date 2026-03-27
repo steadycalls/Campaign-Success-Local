@@ -84,11 +84,11 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
   };
 
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
+    <tr className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
       {/* Name */}
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="font-medium text-sm text-slate-900">{account.name}</span>
+          <span className="font-medium text-sm text-slate-900 dark:text-slate-100">{account.name}</span>
           {account.ghl_location_id && (
             <button
               onClick={() => api.openInChrome(`https://app.gohighlevel.com/v2/location/${account.ghl_location_id}/settings/private-integrations`)}
@@ -101,7 +101,7 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
           )}
         </div>
         {(account.contacts_api_total || account.contact_count > 0) && (
-          <div className="text-[10px] text-slate-400">
+          <div className="text-[10px] text-slate-400 dark:text-slate-500">
             {account.contacts_api_total
               ? `${account.contacts_api_total.toLocaleString()} contacts`
               : `${account.contact_count.toLocaleString()} contacts`}
@@ -116,7 +116,7 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
       <td className="px-3 py-2.5">
         <button
           onClick={copyLocationId}
-          className="flex items-center gap-1 font-mono text-[11px] text-slate-500 hover:text-slate-800"
+          className="flex items-center gap-1 font-mono text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
           title={account.ghl_location_id ?? ''}
         >
           {account.ghl_location_id?.slice(0, 10)}...
@@ -132,7 +132,7 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
             value={pitValue}
             onChange={(e) => setPitValue(e.target.value)}
             placeholder={hasToken ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : 'Paste PIT'}
-            className="w-28 rounded border border-slate-200 px-2 py-1 font-mono text-[11px] focus:border-teal-500 focus:outline-none"
+            className="w-28 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-800 dark:text-slate-200 focus:border-teal-500 focus:outline-none"
           />
           <button
             onClick={handleSave}
@@ -148,7 +148,7 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-          <span className="text-xs text-slate-600">{cfg.label}</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400">{cfg.label}</span>
         </div>
         {account.pit_last_error && account.pit_status === 'invalid' && (
           <p className="mt-0.5 text-[10px] text-red-500 truncate max-w-[120px]" title={account.pit_last_error}>
@@ -168,7 +168,7 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
           <button
             onClick={handleTest}
             disabled={testing}
-            className="rounded border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            className="rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
           >
             {testing ? <Loader2 size={10} className="animate-spin" /> : 'Test'}
           </button>
@@ -182,13 +182,13 @@ export default function SubAccountRow({ account, onUpdate }: Props) {
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-1 rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[10px] font-medium text-teal-700 hover:bg-teal-100 disabled:opacity-40"
+              className="flex items-center gap-1 rounded border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 px-2 py-1 text-[10px] font-medium text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 disabled:opacity-40"
             >
               {syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
               {syncing ? 'Syncing' : 'Sync'}
             </button>
             {syncMsg && (
-              <p className="mt-0.5 text-[10px] text-teal-600 truncate max-w-[120px]">{syncMsg}</p>
+              <p className="mt-0.5 text-[10px] text-teal-600 dark:text-teal-400 truncate max-w-[120px]">{syncMsg}</p>
             )}
           </div>
         )}

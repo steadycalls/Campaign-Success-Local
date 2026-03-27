@@ -1,16 +1,34 @@
 import cron from 'node-cron';
-import { expandMeetingDetails } from './adapters/readai';
+import { expandMeetingDetails, syncReadAiMeetingsRange, getReadAiSyncState, saveReadAiSyncState, getOvernightSyncPending, clearOvernightSync } from './adapters/readai';
 import { syncClientFolders, syncFolderFiles, computeFolderSuggestions } from './adapters/gdrive';
 import { syncCalendarList, syncCalendarEvents } from './adapters/gcal';
-import { logAlert } from './utils/logger';
+import { syncKinstaSites } from './adapters/kinsta';
+import { syncTeamworkProjects } from './adapters/teamwork';
+import { logAlert, logSyncStart, logSyncEnd } from './utils/logger';
 import { delay } from './utils/rateLimit';
 import { queryAll, queryOne } from '../db/client';
 import { computeAllHealthScores } from './health/compute';
+import { generateWeeklyReport } from '../reports/generator';
+import { runAllNotificationChecks, checkAndNotifyUpcomingMeetings } from '../notifications/triggers';
+import { logger } from '../lib/logger';
+import { checkAndRunA2PSchedule } from '../a2p/schedule';
+import { checkAndRunSEOSchedule } from '../seo/schedule';
+import { syncGmail } from './adapters/gmail';
 
 let expandTask: cron.ScheduledTask | null = null;
 let gdriveTask: cron.ScheduledTask | null = null;
 let gcalTask: cron.ScheduledTask | null = null;
 let healthTask: cron.ScheduledTask | null = null;
+let reportTask: cron.ScheduledTask | null = null;
+let kinstaTask: cron.ScheduledTask | null = null;
+let notifyTask: cron.ScheduledTask | null = null;
+let meetingCheckTask: cron.ScheduledTask | null = null;
+let readaiDailyTask: cron.ScheduledTask | null = null;
+let readaiOvernightTask: cron.ScheduledTask | null = null;
+let teamworkTask: cron.ScheduledTask | null = null;
+let a2pTask: cron.ScheduledTask | null = null;
+let seoTask: cron.ScheduledTask | null = null;
+let gmailTask: cron.ScheduledTask | null = null;
 
 function getEnvValue(key: string): string | undefined {
   return process.env[key] || undefined;
@@ -19,16 +37,17 @@ function getEnvValue(key: string): string | undefined {
 export function startScheduler() {
   // Expand unexpanded Read.ai meetings every hour at :30
   expandTask = cron.schedule('30 * * * *', async () => {
-    const apiKey = getEnvValue('READAI_API_KEY');
-    if (!apiKey) return;
+    // Check if Read.ai is authorized (OAuth tokens stored)
+    const readaiAuth = queryOne('SELECT id FROM readai_auth WHERE id = ?', ['default']);
+    if (!readaiAuth) return;
 
     try {
-      const counts = await expandMeetingDetails(apiKey, 10);
+      const counts = await expandMeetingDetails(10);
       if (counts.updated > 0) {
-        console.log(`[scheduler] Read.ai expanded ${counts.updated} meetings`);
+        logger.scheduler('Read.ai expanded meetings', { expanded: counts.updated });
       }
     } catch (err: unknown) {
-      console.error(`[scheduler] Read.ai expand failed: ${err instanceof Error ? err.message : err}`);
+      logger.error('Scheduler', 'Read.ai expand failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }, { timezone: 'America/Chicago' });
 
@@ -40,7 +59,7 @@ export function startScheduler() {
     try {
       const counts = await syncClientFolders();
       computeFolderSuggestions();
-      console.log(`[scheduler] Google Drive synced ${counts.found} folders (${counts.created} new, ${counts.updated} updated)`);
+      logger.scheduler('Google Drive synced', { found: counts.found, created: counts.created, updated: counts.updated });
 
       // Sync files for top 20 most recently modified linked folders
       const linkedFolders = queryAll(`
@@ -55,7 +74,7 @@ export function startScheduler() {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[scheduler] Google Drive sync failed: ${message}`);
+      logger.error('Scheduler', 'Google Drive sync failed', { error: message });
       logAlert('sync_failed', 'warning', `Google Drive sync failed: ${message}`);
     }
   }, { timezone: 'America/Chicago' });
@@ -71,11 +90,11 @@ export function startScheduler() {
       await syncCalendarList();
       const counts = await syncCalendarEvents({ daysBack: 30, daysForward: 14 });
       if (counts.found > 0) {
-        console.log(`[scheduler] Google Calendar synced ${counts.found} events (${counts.created} new, ${counts.updated} updated)`);
+        logger.scheduler('Google Calendar synced', { found: counts.found, created: counts.created, updated: counts.updated });
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[scheduler] Google Calendar sync failed: ${message}`);
+      logger.error('Scheduler', 'Google Calendar sync failed', { error: message });
       logAlert('sync_failed', 'warning', `Google Calendar sync failed: ${message}`);
     }
   }, { timezone: 'America/Chicago' });
@@ -84,21 +103,200 @@ export function startScheduler() {
   healthTask = cron.schedule('5 6,8,10,12,14,16,18,20 * * 1-5', () => {
     try {
       const result = computeAllHealthScores();
-      console.log(`[scheduler] Health scores computed: ${result.computed} companies, ${result.changed} changed`);
+      logger.scheduler('Health scores computed', { computed: result.computed, changed: result.changed });
     } catch (err: unknown) {
-      console.error(`[scheduler] Health score compute failed: ${err instanceof Error ? err.message : err}`);
+      logger.error('Scheduler', 'Health score compute failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }, { timezone: 'America/Chicago' });
 
   // Also compute on startup
   try {
     const result = computeAllHealthScores();
-    console.log(`[scheduler] Health scores (startup): ${result.computed} companies, ${result.changed} changed`);
+    logger.scheduler('Health scores (startup)', { computed: result.computed, changed: result.changed });
   } catch (err: unknown) {
-    console.error(`[scheduler] Health score startup compute failed: ${err instanceof Error ? err.message : err}`);
+    logger.error('Scheduler', 'Health score startup compute failed', { error: err instanceof Error ? err.message : String(err) });
   }
 
-  console.log('[scheduler] Started — Read.ai :30, Google Drive 7/11/15/19, Calendar every 2h, Health every 2h CT weekdays');
+  // Weekly report: auto-generate every Friday at 4 PM CST
+  reportTask = cron.schedule('0 16 * * 5', () => {
+    try {
+      const reportId = generateWeeklyReport({ autoGenerated: true });
+      logger.scheduler('Weekly report generated', { report_id: reportId });
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'Weekly report generation failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Kinsta: daily at 7 AM CST on weekdays
+  kinstaTask = cron.schedule('0 7 * * 1-5', async () => {
+    const apiKey = getEnvValue('KINSTA_API_KEY');
+    if (!apiKey) return;
+
+    const runId = logSyncStart('kinsta', 'scheduled');
+    try {
+      const counts = await syncKinstaSites();
+      logSyncEnd(runId, 'success', counts);
+      logger.scheduler('Kinsta synced', { found: counts.found, created: counts.created, updated: counts.updated });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logSyncEnd(runId, 'error', {}, message);
+      logger.error('Scheduler', 'Kinsta sync failed', { error: message });
+      logAlert('sync_failed', 'warning', `Kinsta sync failed: ${message}`);
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Teamwork: every 4 hours during business hours on weekdays
+  teamworkTask = cron.schedule('30 7,11,15,19 * * 1-5', async () => {
+    const apiKey = getEnvValue('TEAMWORK_API_KEY');
+    if (!apiKey) return;
+
+    const runId = logSyncStart('teamwork', 'scheduled');
+    try {
+      const counts = await syncTeamworkProjects();
+      logSyncEnd(runId, 'success', counts);
+      logger.scheduler('Teamwork synced', { found: counts.found, created: counts.created, updated: counts.updated });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logSyncEnd(runId, 'error', {}, message);
+      logger.error('Scheduler', 'Teamwork sync failed', { error: message });
+      logAlert('sync_failed', 'warning', `Teamwork sync failed: ${message}`);
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Notification checks: SLA, budgets, health drops, new leads, stale syncs
+  // Runs 10 minutes after each health score computation
+  notifyTask = cron.schedule('15 6,8,10,12,14,16,18,20 * * 1-5', async () => {
+    try {
+      await runAllNotificationChecks();
+      logger.scheduler('Notification checks complete');
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'Notification checks failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Meeting reminders: every 5 minutes
+  meetingCheckTask = cron.schedule('*/5 * * * *', async () => {
+    try {
+      await checkAndNotifyUpcomingMeetings();
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'Meeting check failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // Read.ai: sync recent meetings every 2 hours during business hours on weekdays
+  readaiDailyTask = cron.schedule('20 6,8,10,12,14,16,18,20 * * 1-5', async () => {
+    const readaiAuth = queryOne('SELECT id FROM readai_auth WHERE id = ?', ['default']);
+    if (!readaiAuth) return;
+
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const result = await syncReadAiMeetingsRange({
+        sinceDate: yesterday.toISOString(),
+        maxPages: 5,
+      });
+
+      if (result.fetched > 0) {
+        logger.scheduler('Read.ai daily sync', { fetched: result.fetched, created: result.created });
+      }
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'Read.ai daily sync failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Read.ai overnight historical sync: runs at 10 PM CST, processes in batches until 6 AM
+  readaiOvernightTask = cron.schedule('0 22 * * *', async () => {
+    const pending = getOvernightSyncPending();
+    if (!pending) return;
+
+    const readaiAuth = queryOne('SELECT id FROM readai_auth WHERE id = ?', ['default']);
+    if (!readaiAuth) return;
+
+    logger.scheduler('Starting overnight Read.ai sync', { target: pending.range });
+
+    const state = getReadAiSyncState();
+    let totalFetched = 0;
+    let batchNumber = 0;
+
+    while (true) {
+      const now = new Date();
+      const hour = now.getHours();
+      if (hour >= 6 && hour < 22) {
+        logger.scheduler('Read.ai overnight window closed, will resume tonight', { hour });
+        break;
+      }
+
+      try {
+        const result = await syncReadAiMeetingsRange({
+          sinceDate: pending.sinceDate,
+          cursor: state.historicalSyncCursor,
+          maxPages: 10,
+        });
+
+        totalFetched += result.fetched;
+        batchNumber++;
+
+        state.historicalSyncCursor = result.hasMore ? result.cursor : null;
+        state.lastSyncAt = new Date().toISOString();
+        const totalRow = queryOne('SELECT COUNT(*) as cnt FROM meetings');
+        state.totalMeetingsSynced = (totalRow?.cnt as number) || 0;
+        if (result.oldestFetched && (!state.oldestMeetingSynced || result.oldestFetched < state.oldestMeetingSynced)) {
+          state.oldestMeetingSynced = result.oldestFetched;
+        }
+        saveReadAiSyncState(state);
+
+        logger.scheduler('Read.ai overnight batch', { batch: batchNumber, fetched: result.fetched, total: totalFetched });
+
+        if (!result.hasMore) {
+          logger.scheduler('Read.ai historical sync complete', { total_fetched: totalFetched });
+          state.historicalSyncComplete = true;
+          saveReadAiSyncState(state);
+          clearOvernightSync();
+          break;
+        }
+
+        await delay(2000);
+      } catch (err: unknown) {
+        logger.error('Scheduler', 'Read.ai overnight sync error, retrying in 60s', { error: err instanceof Error ? err.message : String(err) });
+        await delay(60000);
+      }
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // A2P compliance: check daily at 3 AM CST if a scheduled run is due
+  a2pTask = cron.schedule('0 3 * * *', async () => {
+    try {
+      await checkAndRunA2PSchedule();
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'A2P schedule check failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // SEO agent: check daily at 5 AM CST if gap detection or feedback tracking is due
+  seoTask = cron.schedule('0 5 * * *', async () => {
+    try {
+      await checkAndRunSEOSchedule();
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'SEO schedule check failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  // Gmail sync: every 2 hours on weekdays, 8am-8pm CT
+  gmailTask = cron.schedule('0 8,10,12,14,16,18,20 * * 1-5', async () => {
+    const auth = queryOne('SELECT id, scopes FROM google_auth WHERE id = ?', ['default']);
+    if (!auth) return;
+    const scopes = (auth.scopes as string) ?? '';
+    if (!scopes.includes('gmail')) return;
+    try {
+      await syncGmail(7);
+      logger.scheduler('Gmail synced');
+    } catch (err: unknown) {
+      logger.error('Scheduler', 'Gmail sync failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }, { timezone: 'America/Chicago' });
+
+  logger.scheduler('Started', { readai: ':30/:20', gdrive: '7/11/15/19', cal: '2h', health: '2h', kinsta: '7am', teamwork: '4h', reports: 'Fri 4pm', notifications: '2h', meetings: '5m', overnight: '10pm CT', a2p: '3am daily', seo: '5am daily', gmail: '2h weekdays' });
 }
 
 export function stopScheduler() {
@@ -118,5 +316,45 @@ export function stopScheduler() {
     healthTask.stop();
     healthTask = null;
   }
-  console.log('[scheduler] Stopped');
+  if (reportTask) {
+    reportTask.stop();
+    reportTask = null;
+  }
+  if (kinstaTask) {
+    kinstaTask.stop();
+    kinstaTask = null;
+  }
+  if (notifyTask) {
+    notifyTask.stop();
+    notifyTask = null;
+  }
+  if (meetingCheckTask) {
+    meetingCheckTask.stop();
+    meetingCheckTask = null;
+  }
+  if (readaiDailyTask) {
+    readaiDailyTask.stop();
+    readaiDailyTask = null;
+  }
+  if (readaiOvernightTask) {
+    readaiOvernightTask.stop();
+    readaiOvernightTask = null;
+  }
+  if (teamworkTask) {
+    teamworkTask.stop();
+    teamworkTask = null;
+  }
+  if (a2pTask) {
+    a2pTask.stop();
+    a2pTask = null;
+  }
+  if (seoTask) {
+    seoTask.stop();
+    seoTask = null;
+  }
+  if (gmailTask) {
+    gmailTask.stop();
+    gmailTask = null;
+  }
+  logger.scheduler('Stopped');
 }

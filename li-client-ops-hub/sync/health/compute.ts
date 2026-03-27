@@ -6,6 +6,7 @@
 import { randomUUID } from 'crypto';
 import { queryAll, queryOne, execute } from '../../db/client';
 import { computeHealthScore } from './scoring';
+import { computeAllChurnRisks } from './churnRisk';
 
 export function computeAllHealthScores(): { computed: number; changed: number } {
   const companies = queryAll(`
@@ -94,6 +95,11 @@ export function computeAllHealthScores(): { computed: number; changed: number } 
       changed++;
     }
   }
+
+  // Compute churn risk scores (piggybacks on the same data)
+  try {
+    computeAllChurnRisks();
+  } catch { /* non-critical */ }
 
   return { computed, changed };
 }

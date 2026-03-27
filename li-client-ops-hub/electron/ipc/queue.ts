@@ -8,6 +8,8 @@ import {
   getQueueStats,
   enqueueFullCompanySync,
 } from '../../sync/queue/manager';
+import { isQueueSaturated } from '../../sync/utils/systemHealth';
+import { logAlert } from '../../sync/utils/logger';
 
 export function registerQueueHandlers(): void {
   // Enqueue a single company sync (manual trigger)
@@ -24,15 +26,23 @@ export function registerQueueHandlers(): void {
     return { success: true, message: 'Sync queued' };
   });
 
-  // Enqueue all enabled companies
+  // Enqueue all enabled companies with priority-based scheduling
   ipcMain.handle('queue:syncAll', () => {
+    // Backpressure: skip if queue is already overwhelmed
+    if (isQueueSaturated()) {
+      logAlert('queue_saturated', 'warning', 'Sync All skipped — queue has too many pending tasks');
+      return { success: false, message: 'Queue saturated — too many pending tasks. Wait for current syncs to finish.' };
+    }
+
     const enabled = queryAll(
-      "SELECT id, name, ghl_location_id FROM companies WHERE sync_enabled = 1 AND pit_status = 'valid' AND status = 'active'"
+      "SELECT id, name, ghl_location_id, sla_status, last_sync_at FROM companies WHERE sync_enabled = 1 AND pit_status = 'valid' AND status = 'active'"
     );
+
     for (const c of enabled) {
+      const priority = calculateSyncPriority(c);
       enqueueFullCompanySync(
         { id: c.id as string, name: (c.name as string) ?? '', ghl_location_id: c.ghl_location_id as string },
-        50
+        priority
       );
     }
     startQueueManager();
@@ -92,6 +102,23 @@ export function registerQueueHandlers(): void {
     return { deleted: result };
   });
 
+  // Debug: dump full queue state
+  ipcMain.handle('debug:getQueueState', () => {
+    const pending = queryAll(
+      "SELECT id, company_name, task_type, status, priority, params_json, created_at FROM sync_queue WHERE status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT 20"
+    );
+    const running = queryAll(
+      "SELECT id, company_name, task_type, status, priority, started_at FROM sync_queue WHERE status = 'running'"
+    );
+    const recentCompleted = queryAll(
+      "SELECT id, company_name, task_type, status, items_found, items_processed, completed_at FROM sync_queue WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 10"
+    );
+    const recentFailed = queryAll(
+      "SELECT id, company_name, task_type, status, error, attempt FROM sync_queue WHERE status = 'failed' ORDER BY created_at DESC LIMIT 10"
+    );
+    return { pending, running, recentCompleted, recentFailed, isQueueRunning: isQueueRunning() };
+  });
+
   // Get active queue tasks
   ipcMain.handle('queue:getActiveTasks', () => {
     return queryAll(
@@ -102,4 +129,27 @@ export function registerQueueHandlers(): void {
        LIMIT 50`
     );
   });
+}
+
+// ── Priority calculation ──────────────────────────────────────────────
+
+function calculateSyncPriority(company: Record<string, unknown>): number {
+  let priority = 50; // base
+
+  // SLA violations get highest priority
+  const sla = company.sla_status as string;
+  if (sla === 'violation') priority += 30;
+  else if (sla === 'warning') priority += 15;
+
+  // Stale data gets higher priority
+  const lastSync = company.last_sync_at as string | null;
+  if (lastSync) {
+    const hoursSince = (Date.now() - new Date(lastSync).getTime()) / 3600000;
+    if (hoursSince > 12) priority += 20;
+    else if (hoursSince > 6) priority += 10;
+  } else {
+    priority += 25; // never synced — urgent
+  }
+
+  return Math.min(priority, 99); // cap at 99, manual = 100
 }

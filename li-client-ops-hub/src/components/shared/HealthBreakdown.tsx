@@ -12,7 +12,7 @@ export default function HealthBreakdown({ components }: HealthBreakdownProps) {
       {components.map((comp, i) => (
         <div key={i} className="flex items-center gap-3">
           {/* Mini progress bar */}
-          <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden shrink-0">
+          <div className="w-24 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shrink-0">
             <div
               className={`h-full rounded-full ${
                 comp.status === 'green' ? 'bg-green-500' :
@@ -24,11 +24,11 @@ export default function HealthBreakdown({ components }: HealthBreakdownProps) {
           </div>
 
           {/* Label + score */}
-          <span className="text-xs text-slate-600 w-32 shrink-0">{comp.name}</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400 w-32 shrink-0">{comp.name}</span>
           <span className="text-xs font-medium w-8 shrink-0">{comp.score}</span>
 
           {/* Detail */}
-          <span className="text-xs text-slate-400 truncate">{comp.detail}</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 truncate">{comp.detail}</span>
         </div>
       ))}
     </div>

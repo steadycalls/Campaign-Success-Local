@@ -18,9 +18,9 @@ function SortTh({ label, k, current, dir, onSort }: { label: string; k: SortKey;
   const active = k === current;
   return (
     <th className="px-3 py-2">
-      <button onClick={() => onSort(k)} className="group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800">
+      <button onClick={() => onSort(k)} className="group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">
         {label}
-        <span className={active ? 'text-teal-600' : 'text-slate-300 group-hover:text-slate-400'}>
+        <span className={active ? 'text-teal-600 dark:text-teal-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'}>
           {active ? (dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronsUpDown size={12} />}
         </span>
       </button>
@@ -59,25 +59,25 @@ export default function TeamworkPage() {
     });
   }, [projects, search, sortKey, sortDir]);
 
-  if (loading) return <div className="p-6 text-sm text-slate-400">Loading...</div>;
+  if (loading) return <div className="p-6 text-sm text-slate-400 dark:text-slate-500">Loading...</div>;
 
   return (
     <div className="p-6">
-      <h1 className="text-lg font-bold text-slate-900">Teamwork Projects</h1>
-      <p className="mt-1 text-xs text-slate-500">{filtered.length} of {projects.length} projects</p>
+      <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Teamwork Projects</h1>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{filtered.length} of {projects.length} projects</p>
 
       <div className="mt-3 relative max-w-sm">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input type="text" placeholder="Search projects..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded border border-slate-200 py-1.5 pl-8 pr-8 text-sm focus:border-teal-500 focus:outline-none" />
-        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X size={14} /></button>}
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <input type="text" placeholder="Search projects..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 py-1.5 pl-8 pr-8 text-sm focus:border-teal-500 focus:outline-none" />
+        {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"><X size={14} /></button>}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-400">{projects.length === 0 ? 'No Teamwork projects synced.' : 'No projects match your search.'}</p>
+        <p className="mt-6 text-sm text-slate-400 dark:text-slate-500">{projects.length === 0 ? 'No Teamwork projects synced.' : 'No projects match your search.'}</p>
       ) : (
-        <div className="mt-3 overflow-auto rounded-lg border border-slate-200 max-h-[600px]">
+        <div className="mt-3 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 max-h-[600px]">
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <SortTh label="Project" k="name" current={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortTh label="Status" k="status" current={sortKey} dir={sortDir} onSort={handleSort} />
@@ -85,13 +85,13 @@ export default function TeamworkPage() {
                 <SortTh label="Client" k="linked_client_name" current={sortKey} dir={sortDir} onSort={handleSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
               {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{p.name}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-600">{p.status ?? '-'}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-600">{p.budget_percent != null ? `${Math.round(p.budget_percent)}%` : '-'}</td>
-                  <td className="px-3 py-2.5 text-xs">{p.linked_client_name ? <span className="text-green-700">{p.linked_client_name}</span> : <span className="text-slate-400">not linked</span>}</td>
+                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100">{p.name}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{p.status ?? '-'}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{p.budget_percent != null ? `${Math.round(p.budget_percent)}%` : '-'}</td>
+                  <td className="px-3 py-2.5 text-xs">{p.linked_client_name ? <span className="text-green-700 dark:text-green-400">{p.linked_client_name}</span> : <span className="text-slate-400 dark:text-slate-500">not linked</span>}</td>
                 </tr>
               ))}
             </tbody>

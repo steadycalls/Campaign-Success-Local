@@ -101,6 +101,17 @@ export function useLiveProgress(companyId: string): LiveProgress {
     return () => { api.offSyncProgress(handler as (...args: unknown[]) => void); };
   }, [companyId, fetchProgress]);
 
+  // Batched sync:progress — check if any event in batch is for this company
+  useEffect(() => {
+    const handler = (_event: unknown, batch: Array<{ companyId?: string }>) => {
+      if (Array.isArray(batch) && batch.some((d) => d?.companyId === companyId)) {
+        fetchProgress();
+      }
+    };
+    api.onBatch('sync:progress', handler as (...args: unknown[]) => void);
+    return () => { api.offBatch('sync:progress', handler as (...args: unknown[]) => void); };
+  }, [companyId, fetchProgress]);
+
   return progress;
 }
 

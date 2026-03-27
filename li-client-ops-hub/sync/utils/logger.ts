@@ -1,10 +1,20 @@
 import { randomUUID } from 'crypto';
-import { queryOne, execute } from '../../db/client';
+import { queryOne, queryAll, execute } from '../../db/client';
+import { logger } from '../../lib/logger';
 
 export interface SyncCounts {
   found: number;
   created: number;
   updated: number;
+}
+
+export interface PhaseCounts {
+  found?: number;
+  created?: number;
+  updated?: number;
+  skipped?: number;
+  failed?: number;
+  apiCalls?: number;
 }
 
 export function logSyncStart(
@@ -19,7 +29,7 @@ export function logSyncStart(
      VALUES (?, ?, ?, 'running', ?, ?, datetime('now'))`,
     [id, trigger, adapter, companyId ?? null, companyName ?? null]
   );
-  console.log(`[sync] Started run=${id} adapter=${adapter} trigger=${trigger}${companyName ? ` company=${companyName}` : ''}`);
+  logger.sync('Started run', { run_id: id, adapter, trigger, company: companyName || undefined });
   return id;
 }
 
@@ -43,9 +53,7 @@ export function logSyncEnd(
       runId,
     ]
   );
-  console.log(
-    `[sync] Finished run=${runId} status=${status} fetched=${counts.found ?? 0} created=${counts.created ?? 0} updated=${counts.updated ?? 0}${errorMessage ? ` error=${errorMessage}` : ''}`
-  );
+  logger.sync('Finished run', { run_id: runId, status, fetched: counts.found ?? 0, created: counts.created ?? 0, updated: counts.updated ?? 0, error: errorMessage || undefined });
 }
 
 export function logAlert(
@@ -60,5 +68,68 @@ export function logAlert(
      VALUES (?, ?, ?, ?, ?, datetime('now'))`,
     [id, companyId ?? null, type, severity, message]
   );
-  console.log(`[sync:alert] ${severity} ${type}: ${message}`);
+  logger.sync('Alert', { severity, type, message, company_id: companyId || undefined });
+}
+
+// ── Phase tracking ────────────────────────────────────────────────────
+
+export function logPhaseStart(
+  runId: string,
+  companyId: string,
+  phaseName: string,
+): string {
+  const phaseId = randomUUID();
+  execute(
+    `INSERT INTO sync_phases (id, run_id, company_id, phase_name, status, started_at)
+     VALUES (?, ?, ?, ?, 'running', datetime('now'))`,
+    [phaseId, runId, companyId, phaseName]
+  );
+  return phaseId;
+}
+
+export function logPhaseEnd(
+  phaseId: string,
+  status: 'completed' | 'failed' | 'skipped',
+  counts: PhaseCounts = {},
+  error?: Error | null,
+): void {
+  execute(
+    `UPDATE sync_phases SET
+      status = ?,
+      ended_at = datetime('now'),
+      duration_ms = CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER),
+      items_found = ?, items_created = ?, items_updated = ?,
+      items_skipped = ?, items_failed = ?,
+      api_calls_made = ?,
+      error_message = ?,
+      error_stack = ?
+    WHERE id = ?`,
+    [
+      status,
+      counts.found ?? 0, counts.created ?? 0, counts.updated ?? 0,
+      counts.skipped ?? 0, counts.failed ?? 0,
+      counts.apiCalls ?? 0,
+      error?.message?.slice(0, 1000) ?? null,
+      error?.stack?.slice(0, 2000) ?? null,
+      phaseId,
+    ]
+  );
+}
+
+export function getPhases(runId: string): Array<Record<string, unknown>> {
+  return queryAll(
+    'SELECT * FROM sync_phases WHERE run_id = ? ORDER BY started_at ASC',
+    [runId]
+  );
+}
+
+/** Mark any still-running phases as failed (for stuck sync recovery) */
+export function failOrphanedPhases(runId: string): number {
+  const result = execute(
+    `UPDATE sync_phases SET status = 'failed', ended_at = datetime('now'),
+      error_message = 'Orphaned: sync run ended without completing this phase'
+     WHERE run_id = ? AND status = 'running'`,
+    [runId]
+  );
+  return result;
 }

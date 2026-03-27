@@ -6,7 +6,7 @@ interface Props {
 
 export default function BudgetBar({ percent, used, total }: Props) {
   if (total === null || total === undefined || total === 0) {
-    return <span className="text-xs text-slate-400">-</span>;
+    return <span className="text-xs text-slate-400 dark:text-slate-500">-</span>;
   }
 
   const color =
@@ -15,12 +15,12 @@ export default function BudgetBar({ percent, used, total }: Props) {
   return (
     <div className="w-full min-w-[80px]">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-600">
+        <span className="text-slate-600 dark:text-slate-400">
           {used != null ? `$${used.toLocaleString()}` : ''}
         </span>
-        <span className="font-medium text-slate-700">{Math.round(percent)}%</span>
+        <span className="font-medium text-slate-700 dark:text-slate-300">{Math.round(percent)}%</span>
       </div>
-      <div className="mt-0.5 h-1.5 w-full rounded-full bg-slate-200">
+      <div className="mt-0.5 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
         <div
           className={`h-1.5 rounded-full ${color} transition-all`}
           style={{ width: `${Math.min(percent, 100)}%` }}

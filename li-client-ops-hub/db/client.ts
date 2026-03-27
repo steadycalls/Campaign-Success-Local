@@ -2,6 +2,7 @@ import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 function getApp() {
   return require('electron').app as import('electron').App;
@@ -10,10 +11,59 @@ function getApp() {
 let db: SqlJsDatabase | null = null;
 let dbPath: string = '';
 
-function saveToDisk(): void {
+function saveToDiskSync(): void {
   if (db && dbPath) {
     const data = db.export();
     fs.writeFileSync(dbPath, Buffer.from(data));
+  }
+}
+
+// ── Debounced save for high-throughput writes ──────────────────────────
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let saveDirty = false;
+let isSaving = false;
+
+function scheduleSave(): void {
+  saveDirty = true;
+  if (!saveTimer) {
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      if (saveDirty && !isSaving) {
+        saveDirty = false;
+        saveToDiskAsync();
+      }
+    }, 2000);
+  }
+}
+
+/** Async disk write — export is sync but the file write is async */
+function saveToDiskAsync(): void {
+  if (!db || !dbPath || isSaving) return;
+  isSaving = true;
+  try {
+    const data = db.export();
+    const buf = Buffer.from(data);
+    fs.writeFile(dbPath, buf, (err) => {
+      isSaving = false;
+      if (err) logger.error('D1', 'Async save failed', { error: err instanceof Error ? err.message : String(err) });
+      // If more writes happened while we were saving, schedule another
+      if (saveDirty) scheduleSave();
+    });
+  } catch (err) {
+    isSaving = false;
+    logger.error('D1', 'Export failed', { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** Flush any pending debounced save immediately (call before app quit). */
+export function flushSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (saveDirty) {
+    saveDirty = false;
+    saveToDiskSync();
   }
 }
 
@@ -24,7 +74,7 @@ export function getDB(): SqlJsDatabase {
 
 export function closeDB(): void {
   if (db) {
-    saveToDisk();
+    flushSave();
     db.close();
     db = null;
   }
@@ -57,7 +107,7 @@ export async function initDB(): Promise<void> {
   runMigrations(app);
 
   seedIntegrations(db);
-  saveToDisk();
+  saveToDiskSync();
 }
 
 function runMigrations(app: import('electron').App): void {
@@ -86,7 +136,7 @@ function runMigrations(app: import('electron').App): void {
     const applied = queryAll('SELECT name FROM _migrations WHERE name = ?', [file]);
     if (applied.length > 0) continue;
 
-    console.log(`[db] Running migration: ${file}`);
+    logger.d1('Running migration', { file });
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
 
     // Strip comment lines, then split into individual statements
@@ -108,12 +158,12 @@ function runMigrations(app: import('electron').App): void {
         if (msg.includes('duplicate column') || msg.includes('already exists')) {
           continue;
         }
-        console.error(`[db] Migration ${file} failed on: ${stmt.slice(0, 80)}`, msg);
+        logger.error('D1', 'Migration failed', { file, statement: stmt.slice(0, 80), error: msg });
       }
     }
 
     db.run('INSERT INTO _migrations (name) VALUES (?)', [file]);
-    console.log(`[db] Migration applied: ${file}`);
+    logger.d1('Migration applied', { file });
   }
 }
 
@@ -132,7 +182,7 @@ function seedIntegrations(database: SqlJsDatabase): void {
     {
       name: 'readai_api',
       display_name: 'Read.ai Cloud API',
-      env_keys: '["READAI_API_KEY"]',
+      env_keys: '["READAI_CLIENT_ID","READAI_CLIENT_SECRET"]',
     },
     {
       name: 'readai_mcp',
@@ -149,6 +199,29 @@ function seedIntegrations(database: SqlJsDatabase): void {
       name: 'discord',
       display_name: 'Discord',
       env_keys: '["DISCORD_BOT_TOKEN","DISCORD_GUILD_ID"]',
+    },
+    {
+      name: 'kinsta',
+      display_name: 'Kinsta',
+      env_keys: '["KINSTA_API_KEY","KINSTA_COMPANY_ID"]',
+    },
+    {
+      name: 'anthropic',
+      display_name: 'Claude AI (Anthropic)',
+      env_keys: '["ANTHROPIC_API_KEY"]',
+      description: 'Claude API key for A2P compliance analysis and content generation.',
+    },
+    {
+      name: 'gmail',
+      display_name: 'Gmail',
+      env_keys: '["GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET"]',
+      description: 'Gmail sync for client email tracking. Uses same Google OAuth credentials.',
+    },
+    {
+      name: 'dataforseo',
+      display_name: 'DataForSEO',
+      env_keys: '["DATAFORSEO_LOGIN","DATAFORSEO_PASSWORD"]',
+      description: 'SERP data, competitor page analysis, and keyword volume lookups.',
     },
   ];
 
@@ -191,6 +264,59 @@ export function execute(sql: string, params: unknown[] = []): number {
   const database = getDB();
   database.run(sql, params);
   const changes = database.getRowsModified();
-  saveToDisk();
+  scheduleSave();
   return changes;
+}
+
+/**
+ * Execute multiple statements inside a single transaction.
+ * Reduces disk I/O by batching writes — only one scheduleSave() at the end.
+ */
+export function executeInTransaction(fn: () => void): void {
+  const database = getDB();
+  database.run('BEGIN TRANSACTION');
+  try {
+    fn();
+    database.run('COMMIT');
+  } catch (err) {
+    database.run('ROLLBACK');
+    throw err;
+  }
+  scheduleSave();
+}
+
+/**
+ * Batch upsert helper: runs upsertFn for each item in batches inside transactions.
+ * Returns count of written and errored items.
+ */
+export function batchUpsert<T>(
+  items: T[],
+  upsertFn: (item: T) => void,
+  batchSize: number = 100,
+): { written: number; errors: number } {
+  const database = getDB();
+  let written = 0;
+  let errors = 0;
+
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    database.run('BEGIN TRANSACTION');
+    try {
+      for (const item of batch) {
+        try {
+          upsertFn(item);
+          written++;
+        } catch {
+          errors++;
+        }
+      }
+      database.run('COMMIT');
+    } catch {
+      try { database.run('ROLLBACK'); } catch { /* already rolled back */ }
+      errors += batch.length;
+    }
+  }
+
+  scheduleSave();
+  return { written, errors };
 }

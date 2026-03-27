@@ -34,4 +34,6 @@ export const PORTFOLIO_COLUMN_TOOLTIPS: Record<string, string> = {
     'Teamwork project budget utilization. Green (<75%), Amber (75-90%), Red (>90%).',
   last_sync:
     'When data was last synced from GHL for this sub-account.',
+  health:
+    'Composite health score (0-100) computed from 8 weighted components: Communication SLA (25%), Contact Velocity (15%), Teamwork Budget (15%), Data Completeness (15%), Meeting Frequency (10%), Message Trend (10%), Drive Activity (5%), Discord Activity (5%). Scores update automatically after each sync for active, sync-enabled companies.',
 };

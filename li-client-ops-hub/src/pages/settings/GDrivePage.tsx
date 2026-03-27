@@ -38,10 +38,10 @@ function SortTh({
     <th className="px-3 py-2">
       <button
         onClick={() => onSort(k)}
-        className="group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800"
+        className="group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
       >
         {label}
-        <span className={active ? 'text-teal-600' : 'text-slate-300 group-hover:text-slate-400'}>
+        <span className={active ? 'text-teal-600 dark:text-teal-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500'}>
           {active ? (
             dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
           ) : (
@@ -142,37 +142,37 @@ function CompanyPicker({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-96 max-h-[500px] flex flex-col rounded-lg bg-white shadow-xl border border-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Select Sub-Account</h3>
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600">
+      <div className="w-96 max-h-[500px] flex flex-col rounded-lg bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Select Sub-Account</h3>
+          <button onClick={onCancel} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
             <X size={16} />
           </button>
         </div>
         <div className="px-4 py-2">
           <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoFocus
-              className="w-full rounded border border-slate-200 py-1.5 pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 py-1.5 pl-8 pr-3 text-sm focus:border-teal-500 focus:outline-none"
             />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {loading ? (
-            <p className="py-4 text-center text-xs text-slate-400">Loading...</p>
+            <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">Loading...</p>
           ) : filtered.length === 0 ? (
-            <p className="py-4 text-center text-xs text-slate-400">No matches</p>
+            <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">No matches</p>
           ) : (
             filtered.map((c) => (
               <button
                 key={c.id}
                 onClick={() => onSelect(c.id)}
-                className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700"
+                className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-950/30 hover:text-teal-700 dark:hover:text-teal-400"
               >
                 {c.name}
               </button>
@@ -208,16 +208,16 @@ function FolderFilesRow({ folder }: { folder: DriveFolder }) {
 
   return (
     <tr>
-      <td colSpan={6} className="bg-slate-50 px-6 py-3">
+      <td colSpan={6} className="bg-slate-50 dark:bg-slate-800/80 px-6 py-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-700">
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
             {folder.name} — {files.length} file{files.length !== 1 ? 's' : ''}
           </span>
           <div className="flex gap-2">
             {folder.web_view_url && (
               <button
                 onClick={() => api.openInChrome(folder.web_view_url!)}
-                className="flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                className="flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 Open in Drive <ExternalLink size={11} />
               </button>
@@ -225,7 +225,7 @@ function FolderFilesRow({ folder }: { folder: DriveFolder }) {
             <button
               onClick={handleSyncFiles}
               disabled={syncing}
-              className="flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              className="flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
             >
               {syncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
               Sync Files
@@ -234,28 +234,28 @@ function FolderFilesRow({ folder }: { folder: DriveFolder }) {
         </div>
 
         {loading ? (
-          <p className="text-xs text-slate-400">Loading files...</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Loading files...</p>
         ) : files.length === 0 ? (
-          <p className="text-xs text-slate-400">No files synced yet. Click "Sync Files" to pull file metadata.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">No files synced yet. Click "Sync Files" to pull file metadata.</p>
         ) : (
-          <div className="overflow-auto rounded border border-slate-200 max-h-64">
+          <div className="overflow-auto rounded border border-slate-200 dark:border-slate-700 max-h-64">
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 bg-slate-100 border-b border-slate-200">
+              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-2 py-1.5 font-medium text-slate-500">File Name</th>
-                  <th className="px-2 py-1.5 font-medium text-slate-500">Type</th>
-                  <th className="px-2 py-1.5 font-medium text-slate-500">Modified</th>
-                  <th className="px-2 py-1.5 font-medium text-slate-500">Size</th>
+                  <th className="px-2 py-1.5 font-medium text-slate-500 dark:text-slate-400">File Name</th>
+                  <th className="px-2 py-1.5 font-medium text-slate-500 dark:text-slate-400">Type</th>
+                  <th className="px-2 py-1.5 font-medium text-slate-500 dark:text-slate-400">Modified</th>
+                  <th className="px-2 py-1.5 font-medium text-slate-500 dark:text-slate-400">Size</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {files.map((f) => (
-                  <tr key={f.id} className="hover:bg-white">
+                  <tr key={f.id} className="hover:bg-white dark:hover:bg-slate-800">
                     <td className="px-2 py-1.5">
                       {f.web_view_url ? (
                         <button
                           onClick={() => api.openInChrome(f.web_view_url!)}
-                          className="text-teal-700 hover:underline inline-flex items-center gap-1"
+                          className="text-teal-700 dark:text-teal-400 hover:underline inline-flex items-center gap-1"
                         >
                           {mimeIcon(f.mime_type)} {f.name}
                         </button>
@@ -263,9 +263,9 @@ function FolderFilesRow({ folder }: { folder: DriveFolder }) {
                         <span>{mimeIcon(f.mime_type)} {f.name}</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5 text-slate-500">{friendlyMime(f.mime_type)}</td>
-                    <td className="px-2 py-1.5 text-slate-500">{shortDate(f.modified_at)}</td>
-                    <td className="px-2 py-1.5 text-slate-500">{formatBytes(f.size_bytes)}</td>
+                    <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400">{friendlyMime(f.mime_type)}</td>
+                    <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400">{shortDate(f.modified_at)}</td>
+                    <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400">{formatBytes(f.size_bytes)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -367,14 +367,14 @@ export default function GDrivePage() {
 
   const linkedCount = folders.filter((f) => f.company_id).length;
 
-  if (loading) return <div className="p-6 text-sm text-slate-400">Loading...</div>;
+  if (loading) return <div className="p-6 text-sm text-slate-400 dark:text-slate-500">Loading...</div>;
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Google Drive — Client Folders</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Google Drive — Client Folders</h1>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
             {authStatus?.email ? (
               <>
                 Authorized as <span className="font-medium">{authStatus.email}</span> &middot;{' '}
@@ -402,18 +402,18 @@ export default function GDrivePage() {
       {/* Search + filter */}
       <div className="mt-4 flex items-center gap-3">
         <div className="relative max-w-sm flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search folders..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded border border-slate-200 py-1.5 pl-8 pr-8 text-sm focus:border-teal-500 focus:outline-none"
+            className="w-full rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 py-1.5 pl-8 pr-8 text-sm focus:border-teal-500 focus:outline-none"
           />
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
             >
               <X size={14} />
             </button>
@@ -422,7 +422,7 @@ export default function GDrivePage() {
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value as FilterMode)}
-          className="rounded border border-slate-200 px-2 py-1.5 text-xs text-slate-700 focus:border-teal-500 focus:outline-none"
+          className="rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:border-teal-500 focus:outline-none"
         >
           <option value="all">All ({folders.length})</option>
           <option value="linked">Linked ({linkedCount})</option>
@@ -431,20 +431,20 @@ export default function GDrivePage() {
             Has Suggestion ({folders.filter((f) => !f.company_id && f.suggested_company_id).length})
           </option>
         </select>
-        <span className="text-xs text-slate-400">{filtered.length} folders</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">{filtered.length} folders</span>
       </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-400">
+        <p className="mt-6 text-sm text-slate-400 dark:text-slate-500">
           {folders.length === 0
             ? 'No folders synced yet. Click "Sync Folders" to pull folder data from Google Drive.'
             : 'No folders match your search/filter.'}
         </p>
       ) : (
-        <div className="mt-3 overflow-auto rounded-lg border border-slate-200 max-h-[600px]">
+        <div className="mt-3 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 max-h-[600px]">
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="w-8 px-2 py-2" />
                 <SortTh label="Folder Name" k="name" current={sortKey} dir={sortDir} onSort={handleSort} />
@@ -454,34 +454,34 @@ export default function GDrivePage() {
                 <SortTh label="Suggested" k="suggestion_score" current={sortKey} dir={sortDir} onSort={handleSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
               {filtered.map((f) => {
                 const isExpanded = expandedId === f.id;
                 return (
                   <>
-                    <tr key={f.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : f.id)}>
-                      <td className="px-2 py-2.5 text-slate-400">
+                    <tr key={f.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : f.id)}>
+                      <td className="px-2 py-2.5 text-slate-400 dark:text-slate-500">
                         <ChevronRight
                           size={14}
                           className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                         />
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className="font-medium text-slate-900">{f.name}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{f.name}</span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-600">{f.file_count}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-600">
+                      <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{f.file_count}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                         {shortDate(f.modified_at)}
                       </td>
                       <td className="px-3 py-2.5 text-xs" onClick={(e) => e.stopPropagation()}>
                         {f.company_id ? (
-                          <span className="inline-flex items-center gap-1 text-green-700">
+                          <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
                             <CheckCircle2 size={13} /> {f.linked_company_name}
                           </span>
                         ) : (
                           <button
                             onClick={() => setPickerForId(f.id)}
-                            className="inline-flex items-center gap-1 text-slate-400 hover:text-teal-600"
+                            className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-400"
                           >
                             <XCircle size={13} /> Link
                           </button>
@@ -491,15 +491,15 @@ export default function GDrivePage() {
                         {!f.company_id && f.suggested_company_id ? (
                           <button
                             onClick={() => handleAcceptSuggestion(f.id)}
-                            className="rounded bg-amber-50 px-2 py-0.5 text-amber-700 hover:bg-amber-100"
+                            className="rounded bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                           >
                             {Math.round((f.suggestion_score ?? 0) * 100)}%{' '}
                             {f.suggested_company_name}
                           </button>
                         ) : f.company_id ? (
-                          <span className="text-slate-300">-</span>
+                          <span className="text-slate-300 dark:text-slate-600">-</span>
                         ) : (
-                          <span className="text-slate-300">-</span>
+                          <span className="text-slate-300 dark:text-slate-600">-</span>
                         )}
                       </td>
                     </tr>

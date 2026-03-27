@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS teamwork_projects (
 
 CREATE TABLE IF NOT EXISTS meetings (
   id                    TEXT PRIMARY KEY,
-  company_id            TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  company_id            TEXT REFERENCES companies(id) ON DELETE SET NULL,
   readai_meeting_id     TEXT,
   title                 TEXT,
   meeting_date          TEXT NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS meetings (
 CREATE TABLE IF NOT EXISTS action_items (
   id                    TEXT PRIMARY KEY,
   meeting_id            TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-  company_id            TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  company_id            TEXT REFERENCES companies(id) ON DELETE SET NULL,
   text                  TEXT NOT NULL,
   assignee              TEXT,
   status                TEXT NOT NULL DEFAULT 'open',  -- open | done
